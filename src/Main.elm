@@ -4,7 +4,6 @@ import Browser exposing (Document)
 import Html
 import Html.Attributes as Attributes
 import Json.Decode exposing (Value)
-import Url exposing (Url)
 
 
 type alias Model =
@@ -24,7 +23,7 @@ view : Model -> Document Msg
 view model =
     { title = "Tetris"
     , body =
-        [ Html.div [ Attributes.class "text-4xl" ]
+        [ Html.div [ Attributes.class "container text-3xl" ]
             [ Html.text "This is going to be tetris"
             ]
         ]
