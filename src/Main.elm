@@ -22,8 +22,12 @@ init flags =
 
 view : Model -> Document Msg
 view model =
-    { title = "title"
-    , body = [ Html.div [ Attributes.class "text-4xl" ] [ Html.text "test me" ] ]
+    { title = "Tetris"
+    , body =
+        [ Html.div [ Attributes.class "text-4xl" ]
+            [ Html.text "This is going to be tetris"
+            ]
+        ]
     }
 
 

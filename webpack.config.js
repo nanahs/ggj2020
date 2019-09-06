@@ -9,7 +9,14 @@ module.exports = (env, options) => ({
       { test: /\.js$/, exclude: /node_modules/, use: "babel-loader" },
       {
         test: /\.css$/,
-        use: [MiniCssExtractPlugin.loader, "css-loader", "postcss-loader"]
+        use: [
+          MiniCssExtractPlugin.loader,
+          "css-loader",
+          {
+            loader: "postcss-loader",
+            options: { config: { ctx: { mode: options.mode } } }
+          }
+        ]
       },
       {
         test: /\.elm$/,

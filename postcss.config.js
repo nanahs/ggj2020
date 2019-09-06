@@ -3,12 +3,10 @@ const purgecss = require("@fullhuman/postcss-purgecss")({
   defaultExtractor: content => content.match(/[A-Za-z0-9-_:/]+/g) || []
 });
 
-module.exports = {
+module.exports = ({ options }) => ({
   plugins: [
     require("tailwindcss"),
     require("postcss-preset-env"),
-    ...(process.env.NODE_ENV === "production"
-      ? [purgecss, require("cssnano")]
-      : [])
+    ...(options.mode === "production" ? [purgecss, require("cssnano")] : [])
   ]
-};
+});
