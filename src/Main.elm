@@ -2,7 +2,6 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
-import Dict exposing (Dict)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Json.Decode as Decode exposing (Decoder, Value)
@@ -12,9 +11,9 @@ import Svg.Attributes as SvgAttrs
 
 type alias Model =
     { score : ( Int, Int )
-    , player1 : Vector2
-    , player2 : Vector2
-    , ball : PhysObj
+    , player1 : Paddle
+    , player2 : Paddle
+    , ball : Ball
     , isPause : Bool
     , p1Up : KeyState
     , p1Down : KeyState
@@ -26,7 +25,6 @@ type Msg
     | TogglePause
     | Input KeyState Input
     | Tick Float
-    | NoOp
 
 
 type alias Vector2 =
@@ -35,17 +33,25 @@ type alias Vector2 =
     }
 
 
-type alias PhysObj =
+type alias Ball =
     { pos : Vector2
     , vel : Vector2
+    , radius : Int
+    }
+
+
+type alias Paddle =
+    { height : Int
+    , width : Int
+    , pos : Vector2
     }
 
 
 initialModel : Model
 initialModel =
     { score = ( 0, 0 )
-    , player1 = vector2Center paddleSize
-    , player2 = vector2Sub gameBoard (vector2Center paddleSize)
+    , player1 = { pos = centerPoint { height = 75, width = 10 }, height = 75, width = 10 }
+    , player2 = { pos = vector2Sub gameBoard (centerPoint { height = 75, width = 10 }), height = 75, width = 10 }
     , ball = initBall
     , isPause = False
     , p1Up = Up
@@ -53,16 +59,12 @@ initialModel =
     }
 
 
-initBall : PhysObj
+initBall : Ball
 initBall =
-    { vel = { x = -5, y = 0 }
+    { vel = { x = -1, y = 0 }
     , pos = { x = gameBoard.x // 2, y = gameBoard.y // 2 }
+    , radius = 10
     }
-
-
-vector2Zero : Vector2
-vector2Zero =
-    { x = 0, y = 0 }
 
 
 vector2Add : Vector2 -> Vector2 -> Vector2
@@ -80,10 +82,10 @@ vector2Scale { x, y } scale =
     { x = x * scale, y = y * scale }
 
 
-vector2Center : Vector2 -> Vector2
-vector2Center { x, y } =
+centerPoint : { height : Int, width : Int } -> Vector2
+centerPoint { height, width } =
     --mid point assuming the x and y are width and height
-    { x = x // 2, y = y // 2 }
+    { x = width // 2, y = height // 2 }
 
 
 clampY : Int -> Int -> Vector2 -> Vector2
@@ -117,51 +119,33 @@ gameBoard =
     }
 
 
-paddleSize : Vector2
-paddleSize =
-    { x = 10
-    , y = 75
-    }
-
-
-ballRadius : Int
-ballRadius =
-    10
-
-
 
 -- VIEW
 
 
-paddle : Vector2 -> Svg.Svg msg
-paddle pos =
+viewPaddle : Paddle -> Svg.Svg msg
+viewPaddle paddle =
     -- make size and width screen relative
     let
         posOffset =
-            vector2Center paddleSize
+            centerPoint { height = paddle.height, width = paddle.width }
     in
     Svg.rect
-        [ SvgAttrs.height <| String.fromInt paddleSize.y
-        , SvgAttrs.width <| String.fromInt paddleSize.x
-        , SvgAttrs.cy "37.5"
-        , SvgAttrs.cx "5"
-        , SvgAttrs.x <| String.fromInt <| pos.x - posOffset.x
-        , SvgAttrs.y <| String.fromInt <| pos.y - posOffset.y
+        [ SvgAttrs.height <| String.fromInt paddle.height
+        , SvgAttrs.width <| String.fromInt paddle.width
+        , SvgAttrs.x <| String.fromInt <| paddle.pos.x - posOffset.x
+        , SvgAttrs.y <| String.fromInt <| paddle.pos.y - posOffset.y
         ]
         []
 
 
-ball : Vector2 -> Svg.Svg msg
-ball pos =
-    let
-        posOffset =
-            vector2Center { x = ballRadius, y = ballRadius }
-    in
+viewBall : Ball -> Svg.Svg msg
+viewBall ball =
     Svg.circle
-        [ SvgAttrs.r <| String.fromInt ballRadius
+        [ SvgAttrs.r <| String.fromInt ball.radius
         , SvgAttrs.fill "black"
-        , SvgAttrs.cx <| String.fromInt <| pos.x - posOffset.x
-        , SvgAttrs.cy <| String.fromInt <| pos.y - posOffset.y
+        , SvgAttrs.cx <| String.fromInt <| ball.pos.x
+        , SvgAttrs.cy <| String.fromInt <| ball.pos.y
         ]
         []
 
@@ -174,9 +158,9 @@ view model =
             , SvgAttrs.height <| String.fromInt gameBoard.y
             , SvgAttrs.class "border border-black"
             ]
-            [ paddle model.player1
-            , paddle model.player2
-            , ball model.ball.pos
+            [ viewPaddle model.player1
+            , viewPaddle model.player2
+            , viewBall model.ball
             ]
         ]
 
@@ -209,10 +193,10 @@ update msg model =
             --updating positions only allowed in the Tick
             let
                 loc =
-                    model.player1
+                    model.player1.pos
 
                 paddleCenter =
-                    vector2Center paddleSize
+                    centerPoint { height = model.player1.height, width = model.player1.width }
 
                 offsetY =
                     case ( model.p1Down, model.p1Up ) of
@@ -231,40 +215,38 @@ update msg model =
                 --Ball movement
                 ballNewLoc =
                     vector2Add model.ball.pos model.ball.vel
-                        |> clampY ballRadius (gameBoard.y - ballRadius)
-                        |> clampX ballRadius (gameBoard.x - ballRadius)
+                        |> clampY model.ball.radius (gameBoard.y - model.ball.radius)
+                        |> clampX model.ball.radius (gameBoard.x - model.ball.radius)
 
                 isPaddleCollision p1 p2 b bVel =
                     if bVel.x < 0 then
-                        if b.x - p1.x < ballRadius + paddleCenter.x then
+                        if b.x - p1.x < model.ball.radius + paddleCenter.x then
                             True
 
                         else
                             False
 
-                    else if p2.x - b.x < ballRadius + paddleCenter.x then
+                    else if p2.x - b.x < model.ball.radius + paddleCenter.x then
                         True
 
                     else
                         False
             in
             ( { model
-                | player1 = newLoc
+                | player1 = { pos = newLoc, height = model.player1.height, width = model.player1.width }
                 , ball =
                     { pos = ballNewLoc
                     , vel =
-                        if isPaddleCollision newLoc model.player2 ballNewLoc model.ball.vel then
+                        if isPaddleCollision newLoc model.player2.pos ballNewLoc model.ball.vel then
                             vector2Scale model.ball.vel -1
 
                         else
                             model.ball.vel
+                    , radius = model.ball.radius
                     }
               }
             , Cmd.none
             )
-
-        NoOp ->
-            ( model, Cmd.none )
 
 
 type KeyState
@@ -288,16 +270,6 @@ toInput keyState str =
 
         _ ->
             Decode.fail ""
-
-
-inputToId : Input -> String
-inputToId input =
-    case input of
-        MoveUp ->
-            "MoveUp"
-
-        MoveDown ->
-            "MoveDown"
 
 
 init : Value -> ( Model, Cmd Msg )
