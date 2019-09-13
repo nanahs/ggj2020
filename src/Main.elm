@@ -7,6 +7,7 @@ import Html.Attributes as Attributes
 import Json.Decode as Decode exposing (Decoder, Value)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
+import Vector2 as Vector2 exposing (Vector2)
 
 
 type alias Model =
@@ -22,15 +23,9 @@ type alias Model =
 
 type Msg
     = UpdateScore ( Int, Int )
-    | TogglePause
     | Input KeyState Input
     | Tick Float
-
-
-type alias Vector2 =
-    { x : Int
-    , y : Int
-    }
+    | PauseGame
 
 
 type alias Ball =
@@ -49,9 +44,13 @@ type alias Paddle =
 
 initialModel : Model
 initialModel =
+    let
+        { h, w } =
+            { h = 75, w = 10 }
+    in
     { score = ( 0, 0 )
-    , player1 = { pos = centerPoint { height = 75, width = 10 }, height = 75, width = 10 }
-    , player2 = { pos = vector2Sub gameBoard (centerPoint { height = 75, width = 10 }), height = 75, width = 10 }
+    , player1 = { pos = Vector2.zero, height = h, width = w }
+    , player2 = { pos = Vector2.sub gameBoard { x = w, y = (h // 2) + (gameBoard.y // 2) }, height = h, width = w }
     , ball = initBall
     , isPause = False
     , p1Up = Up
@@ -61,31 +60,10 @@ initialModel =
 
 initBall : Ball
 initBall =
-    { vel = { x = -1, y = 0 }
+    { vel = { x = -5, y = 0 }
     , pos = { x = gameBoard.x // 2, y = gameBoard.y // 2 }
     , radius = 10
     }
-
-
-vector2Add : Vector2 -> Vector2 -> Vector2
-vector2Add f s =
-    { x = f.x + s.x, y = f.y + s.y }
-
-
-vector2Sub : Vector2 -> Vector2 -> Vector2
-vector2Sub f s =
-    { x = f.x - s.x, y = f.y - s.y }
-
-
-vector2Scale : Vector2 -> Int -> Vector2
-vector2Scale { x, y } scale =
-    { x = x * scale, y = y * scale }
-
-
-centerPoint : { height : Int, width : Int } -> Vector2
-centerPoint { height, width } =
-    --mid point assuming the x and y are width and height
-    { x = width // 2, y = height // 2 }
 
 
 clampY : Int -> Int -> Vector2 -> Vector2
@@ -119,22 +97,171 @@ gameBoard =
     }
 
 
+isRectCircCollision : Paddle -> Ball -> Bool
+isRectCircCollision paddle ball =
+    let
+        nearestX =
+            max paddle.pos.x <| min ball.pos.x <| paddle.pos.x + paddle.width
+
+        nearestY =
+            max paddle.pos.y <| min ball.pos.y <| paddle.pos.y + paddle.height
+
+        deltaX =
+            ball.pos.x - nearestX
+
+        deltaY =
+            ball.pos.y - nearestY
+    in
+    (deltaX * deltaX + deltaY * deltaY) < (ball.radius * ball.radius)
+
+
+
+-- UPDATE
+
+
+update : Msg -> Model -> ( Model, Cmd Msg )
+update msg model =
+    case msg of
+        UpdateScore newScore ->
+            ( { model | score = newScore }, Cmd.none )
+
+        Input keyState input ->
+            ( case input of
+                MoveUp ->
+                    { model | p1Up = keyState }
+
+                MoveDown ->
+                    { model | p1Down = keyState }
+
+                Pause ->
+                    { model | isPause = not model.isPause }
+            , Cmd.none
+            )
+
+        --TODO use delta time to remove reliance on animatin frame rate
+        Tick _ ->
+            --updating positions only allowed in the Tick
+            let
+                loc =
+                    model.player1.pos
+
+                offsetY =
+                    case ( model.p1Down, model.p1Up ) of
+                        ( Down, Up ) ->
+                            1
+
+                        ( Up, Down ) ->
+                            -1
+
+                        ( _, _ ) ->
+                            0
+
+                newLoc =
+                    clampY 0 (gameBoard.y - model.player1.height) { loc | y = loc.y + (offsetY * 5) }
+
+                --Ball movement
+                ballNewLoc =
+                    Vector2.add model.ball.pos model.ball.vel
+                        |> clampY model.ball.radius (gameBoard.y - model.ball.radius)
+                        |> clampX model.ball.radius (gameBoard.x - model.ball.radius)
+            in
+            ( { model
+                | player1 = { pos = newLoc, height = model.player1.height, width = model.player1.width }
+                , ball =
+                    { pos = ballNewLoc
+                    , vel =
+                        if isRectCircCollision model.player1 model.ball && model.ball.vel.x < 0 then
+                            Vector2.scale model.ball.vel -1
+
+                        else if isRectCircCollision model.player2 model.ball && model.ball.vel.x > 0 then
+                            Vector2.scale model.ball.vel -1
+
+                        else
+                            model.ball.vel
+                    , radius = model.ball.radius
+                    }
+              }
+            , Cmd.none
+            )
+
+        PauseGame ->
+            ( model, Cmd.none )
+
+
+type KeyState
+    = Up
+    | Down
+
+
+type Input
+    = MoveUp
+    | MoveDown
+    | Pause
+
+
+toInput : KeyState -> String -> Decoder Msg
+toInput keyState str =
+    case str of
+        "ArrowUp" ->
+            Decode.succeed <| Input keyState MoveUp
+
+        "ArrowDown" ->
+            Decode.succeed <| Input keyState MoveDown
+
+        "Escape" ->
+            case keyState of
+                Up ->
+                    Decode.succeed <| Input Up Pause
+
+                _ ->
+                    Decode.fail ""
+
+        _ ->
+            Decode.fail ""
+
+
+init : Value -> ( Model, Cmd Msg )
+init _ =
+    ( initialModel, Cmd.none )
+
+
 
 -- VIEW
+
+
+viewBounds : Bool -> Svg.Svg msg
+viewBounds isPaused =
+    Svg.rect
+        [ SvgAttrs.width <| String.fromInt gameBoard.x
+        , SvgAttrs.height <| String.fromInt gameBoard.y
+        , SvgAttrs.strokeWidth "1"
+        , SvgAttrs.stroke "black"
+        , if isPaused then
+            SvgAttrs.fill "grey"
+
+          else
+            SvgAttrs.fill "white"
+        ]
+        []
+
+
+viewScore : ( Int, Int ) -> Svg.Svg msg
+viewScore ( p1, p2 ) =
+    Svg.text_
+        [ SvgAttrs.x "440"
+        , SvgAttrs.y "20"
+        ]
+        [ Svg.text <| String.join " " [ String.fromInt p1, "-", String.fromInt p2 ] ]
 
 
 viewPaddle : Paddle -> Svg.Svg msg
 viewPaddle paddle =
     -- make size and width screen relative
-    let
-        posOffset =
-            centerPoint { height = paddle.height, width = paddle.width }
-    in
     Svg.rect
         [ SvgAttrs.height <| String.fromInt paddle.height
         , SvgAttrs.width <| String.fromInt paddle.width
-        , SvgAttrs.x <| String.fromInt <| paddle.pos.x - posOffset.x
-        , SvgAttrs.y <| String.fromInt <| paddle.pos.y - posOffset.y
+        , SvgAttrs.x <| String.fromInt <| paddle.pos.x
+        , SvgAttrs.y <| String.fromInt <| paddle.pos.y
         ]
         []
 
@@ -156,125 +283,14 @@ view model =
         [ Svg.svg
             [ SvgAttrs.width <| String.fromInt gameBoard.x
             , SvgAttrs.height <| String.fromInt gameBoard.y
-            , SvgAttrs.class "border border-black"
             ]
-            [ viewPaddle model.player1
+            [ viewBounds model.isPause
+            , viewScore model.score
+            , viewPaddle model.player1
             , viewPaddle model.player2
             , viewBall model.ball
             ]
         ]
-
-
-
--- UPDATE
-
-
-update : Msg -> Model -> ( Model, Cmd Msg )
-update msg model =
-    case msg of
-        UpdateScore newScore ->
-            ( { model | score = newScore }, Cmd.none )
-
-        TogglePause ->
-            ( { model | isPause = not model.isPause }, Cmd.none )
-
-        Input keyState input ->
-            ( case input of
-                MoveUp ->
-                    { model | p1Up = keyState }
-
-                MoveDown ->
-                    { model | p1Down = keyState }
-            , Cmd.none
-            )
-
-        --TODO use delta time to remove reliance on animatin frame rate
-        Tick _ ->
-            --updating positions only allowed in the Tick
-            let
-                loc =
-                    model.player1.pos
-
-                paddleCenter =
-                    centerPoint { height = model.player1.height, width = model.player1.width }
-
-                offsetY =
-                    case ( model.p1Down, model.p1Up ) of
-                        ( Down, Up ) ->
-                            1
-
-                        ( Up, Down ) ->
-                            -1
-
-                        ( _, _ ) ->
-                            0
-
-                newLoc =
-                    clampY paddleCenter.y (gameBoard.y - paddleCenter.y) { loc | y = loc.y + (offsetY * 5) }
-
-                --Ball movement
-                ballNewLoc =
-                    vector2Add model.ball.pos model.ball.vel
-                        |> clampY model.ball.radius (gameBoard.y - model.ball.radius)
-                        |> clampX model.ball.radius (gameBoard.x - model.ball.radius)
-
-                isPaddleCollision p1 p2 b bVel =
-                    if bVel.x < 0 then
-                        if b.x - p1.x < model.ball.radius + paddleCenter.x then
-                            True
-
-                        else
-                            False
-
-                    else if p2.x - b.x < model.ball.radius + paddleCenter.x then
-                        True
-
-                    else
-                        False
-            in
-            ( { model
-                | player1 = { pos = newLoc, height = model.player1.height, width = model.player1.width }
-                , ball =
-                    { pos = ballNewLoc
-                    , vel =
-                        if isPaddleCollision newLoc model.player2.pos ballNewLoc model.ball.vel then
-                            vector2Scale model.ball.vel -1
-
-                        else
-                            model.ball.vel
-                    , radius = model.ball.radius
-                    }
-              }
-            , Cmd.none
-            )
-
-
-type KeyState
-    = Up
-    | Down
-
-
-type Input
-    = MoveUp
-    | MoveDown
-
-
-toInput : KeyState -> String -> Decoder Msg
-toInput keyState str =
-    case str of
-        "ArrowUp" ->
-            Decode.succeed <| Input keyState MoveUp
-
-        "ArrowDown" ->
-            Decode.succeed <| Input keyState MoveDown
-
-        _ ->
-            Decode.fail ""
-
-
-init : Value -> ( Model, Cmd Msg )
-init _ =
-    ( initialModel, Cmd.none )
 
 
 main : Program Value Model Msg
@@ -292,11 +308,18 @@ main =
 
 
 subscriptions : Model -> Sub Msg
-subscriptions _ =
+subscriptions model =
     Sub.batch
         [ Browser.Events.onKeyDown <|
             Decode.andThen (toInput Down) (Decode.field "key" Decode.string)
         , Browser.Events.onKeyUp <|
             Decode.andThen (toInput Up) (Decode.field "key" Decode.string)
-        , Browser.Events.onAnimationFrameDelta (\f -> Tick <| f / 1000)
+        , Browser.Events.onAnimationFrameDelta
+            (\f ->
+                if model.isPause then
+                    PauseGame
+
+                else
+                    Tick <| f / 1000
+            )
         ]
