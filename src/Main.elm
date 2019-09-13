@@ -75,6 +75,11 @@ vector2Sub f s =
     { x = f.x - s.x, y = f.y - s.y }
 
 
+vector2Scale : Vector2 -> Int -> Vector2
+vector2Scale { x, y } scale =
+    { x = x * scale, y = y * scale }
+
+
 vector2Center : Vector2 -> Vector2
 vector2Center { x, y } =
     --mid point assuming the x and y are width and height
@@ -228,10 +233,32 @@ update msg model =
                     vector2Add model.ball.pos model.ball.vel
                         |> clampY ballRadius (gameBoard.y - ballRadius)
                         |> clampX ballRadius (gameBoard.x - ballRadius)
+
+                isPaddleCollision p1 p2 b bVel =
+                    if bVel.x < 0 then
+                        if b.x - p1.x < ballRadius + paddleCenter.x then
+                            True
+
+                        else
+                            False
+
+                    else if p2.x - b.x < ballRadius + paddleCenter.x then
+                        True
+
+                    else
+                        False
             in
             ( { model
                 | player1 = newLoc
-                , ball = { pos = ballNewLoc, vel = model.ball.vel }
+                , ball =
+                    { pos = ballNewLoc
+                    , vel =
+                        if isPaddleCollision newLoc model.player2 ballNewLoc model.ball.vel then
+                            vector2Scale model.ball.vel -1
+
+                        else
+                            model.ball.vel
+                    }
               }
             , Cmd.none
             )
