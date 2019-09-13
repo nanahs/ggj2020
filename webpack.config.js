@@ -2,6 +2,33 @@ const CopyPlugin = require("copy-webpack-plugin");
 const MiniCssExtractPlugin = require("mini-css-extract-plugin");
 const HtmlWebpackPlugin = require("html-webpack-plugin");
 
+module.exports = (env, { mode }) => ({
+  output: { filename: "[name].[contenthash].js" },
+  module: {
+    rules: [
+      {
+        test: /\.js$/,
+        exclude: /node_modules/,
+        use: babelLoader
+      },
+      {
+        test: /\.css$/,
+        use: [MiniCssExtractPlugin.loader, "css-loader", postCssLoader(mode)]
+      },
+      {
+        test: /\.elm$/,
+        exclude: [/elm-stuff/, /node_modules/],
+        use: elmWebpackLoader(mode)
+      }
+    ]
+  },
+  plugins: [
+    new HtmlWebpackPlugin({ template: "src/index.html" }),
+    new MiniCssExtractPlugin({ filename: "[name].[contenthash].css" }),
+    new CopyPlugin([{ from: "public" }])
+  ]
+});
+
 const babelLoader = {
   loader: "babel-loader",
   options: { presets: ["@babel/preset-env"] }
@@ -36,31 +63,4 @@ const elmWebpackLoader = mode => ({
     debug: mode === "development",
     optimize: mode === "production"
   }
-});
-
-module.exports = (env, { mode }) => ({
-  output: { filename: "[name].[contenthash].js" },
-  module: {
-    rules: [
-      {
-        test: /\.js$/,
-        exclude: /node_modules/,
-        use: babelLoader
-      },
-      {
-        test: /\.css$/,
-        use: [MiniCssExtractPlugin.loader, "css-loader", postCssLoader(mode)]
-      },
-      {
-        test: /\.elm$/,
-        exclude: [/elm-stuff/, /node_modules/],
-        use: elmWebpackLoader(mode)
-      }
-    ]
-  },
-  plugins: [
-    new HtmlWebpackPlugin({ template: "src/index.html" }),
-    new MiniCssExtractPlugin({ filename: "[name].[contenthash].css" }),
-    new CopyPlugin([{ from: "public" }])
-  ]
 });
