@@ -280,6 +280,12 @@ update msg model =
                                         |> Vector2.normalize
                                         |> Vector2.scale 5
 
+                                else if Vector2.getY ballNewLoc <= model.ball.radius then
+                                    Vector2.setY (Vector2.getY model.ball.vel * -1) model.ball.vel
+
+                                else if Vector2.getY ballNewLoc >= Vector2.getY gameBoard - model.ball.radius then
+                                    Vector2.setY (Vector2.getY model.ball.vel * -1) model.ball.vel
+
                                 else
                                     model.ball.vel
                             , radius = model.ball.radius
