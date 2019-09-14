@@ -36,13 +36,13 @@ type Msg
 type alias Ball =
     { pos : Vector2
     , vel : Vector2
-    , radius : Int
+    , radius : Float
     }
 
 
 type alias Paddle =
-    { height : Int
-    , width : Int
+    { height : Float
+    , width : Float
     , pos : Vector2
     }
 
@@ -74,7 +74,7 @@ initialModel =
     in
     { score = { p1 = 0, p2 = 0 }
     , player1 = { pos = Vector2.zero, height = h, width = w }
-    , player2 = { pos = Vector2.sub gameBoard { x = w, y = (h // 2) + (gameBoard.y // 2) }, height = h, width = w }
+    , player2 = { pos = Vector2.sub gameBoard <| Vector2.create { x = w, y = (h / 2) + (Vector2.getY gameBoard / 2) }, height = h, width = w }
     , ball = initBall 0
     , isPause = False
     , p1Up = Up
@@ -85,33 +85,33 @@ initialModel =
     }
 
 
-initBall : Int -> Ball
+initBall : Float -> Ball
 initBall xVel =
-    { vel = { x = xVel, y = 0 }
-    , pos = { x = gameBoard.x // 2, y = gameBoard.y // 2 }
+    { vel = Vector2.create { x = xVel, y = 0 }
+    , pos = Vector2.create { x = Vector2.getX gameBoard / 2, y = Vector2.getY gameBoard / 2 }
     , radius = 10
     }
 
 
-clampY : Int -> Int -> Vector2 -> Vector2
+clampY : Float -> Float -> Vector2 -> Vector2
 clampY min max vect2 =
-    if vect2.y < min then
-        { x = vect2.x, y = min }
+    if Vector2.getY vect2 < min then
+        Vector2.create { x = Vector2.getX vect2, y = min }
 
-    else if vect2.y > max then
-        { x = vect2.x, y = max }
+    else if Vector2.getY vect2 > max then
+        Vector2.create { x = Vector2.getX vect2, y = max }
 
     else
         vect2
 
 
-clampX : Int -> Int -> Vector2 -> Vector2
+clampX : Float -> Float -> Vector2 -> Vector2
 clampX min max vect2 =
-    if vect2.x < min then
-        { x = min, y = vect2.y }
+    if Vector2.getX vect2 < min then
+        Vector2.create { x = min, y = Vector2.getY vect2 }
 
-    else if vect2.x > max then
-        { x = max, y = vect2.y }
+    else if Vector2.getX vect2 > max then
+        Vector2.create { x = max, y = Vector2.getY vect2 }
 
     else
         vect2
@@ -119,25 +119,32 @@ clampX min max vect2 =
 
 gameBoard : Vector2
 gameBoard =
-    { x = 896
-    , y = 504
-    }
+    Vector2.create
+        { x = 896
+        , y = 504
+        }
 
 
 isRectCircCollision : Paddle -> Ball -> Bool
 isRectCircCollision paddle ball =
     let
         nearestX =
-            max paddle.pos.x <| min ball.pos.x <| paddle.pos.x + paddle.width
+            max (Vector2.getX paddle.pos) <|
+                min (Vector2.getX ball.pos) <|
+                    Vector2.getX paddle.pos
+                        + paddle.width
 
         nearestY =
-            max paddle.pos.y <| min ball.pos.y <| paddle.pos.y + paddle.height
+            max (Vector2.getY paddle.pos) <|
+                min (Vector2.getY ball.pos) <|
+                    Vector2.getY paddle.pos
+                        + paddle.height
 
         deltaX =
-            ball.pos.x - nearestX
+            Vector2.getX ball.pos - nearestX
 
         deltaY =
-            ball.pos.y - nearestY
+            Vector2.getY ball.pos - nearestY
     in
     (deltaX * deltaX + deltaY * deltaY) < (ball.radius * ball.radius)
 
@@ -210,28 +217,28 @@ update msg model =
                             0
 
                 paddleNewLoc =
-                    clampY 0 (gameBoard.y - model.player1.height)
+                    clampY 0 (Vector2.getY gameBoard - model.player1.height)
 
                 p1NewLoc =
-                    paddleNewLoc { p1Loc | y = p1Loc.y + (p1OffsetY * 5) }
+                    paddleNewLoc <| Vector2.setY (Vector2.getY p1Loc + (p1OffsetY * 5)) p1Loc
 
                 p2NewLoc =
-                    paddleNewLoc { p2Loc | y = p2Loc.y + (p2OffsetY * 5) }
+                    paddleNewLoc <| Vector2.setY (Vector2.getY p2Loc + (p2OffsetY * 5)) p2Loc
 
                 --Ball movement
                 ballNewLoc =
                     Vector2.add model.ball.pos model.ball.vel
-                        |> clampY model.ball.radius (gameBoard.y - model.ball.radius)
-                        |> clampX model.ball.radius (gameBoard.x - model.ball.radius)
+                        |> clampY model.ball.radius (Vector2.getY gameBoard - model.ball.radius)
+                        |> clampX model.ball.radius (Vector2.getX gameBoard - model.ball.radius)
 
                 score =
                     model.score
 
                 maybeNewScore =
-                    if ballNewLoc.x <= model.ball.radius then
+                    if Vector2.getX ballNewLoc <= model.ball.radius then
                         Just { score | p2 = score.p2 + 1 }
 
-                    else if ballNewLoc.x >= gameBoard.x - model.ball.radius then
+                    else if Vector2.getX ballNewLoc >= Vector2.getX gameBoard - model.ball.radius then
                         Just { score | p1 = score.p1 + 1 }
 
                     else
@@ -255,11 +262,23 @@ update msg model =
                         Nothing ->
                             { pos = ballNewLoc
                             , vel =
-                                if isRectCircCollision model.player1 model.ball && model.ball.vel.x < 0 then
-                                    Vector2.scale model.ball.vel -1
+                                if isRectCircCollision model.player1 model.ball && Vector2.getX model.ball.vel < 0 then
+                                    Vector2.sub model.ball.pos
+                                        (Vector2.setY
+                                            (Vector2.getY model.player1.pos + model.player1.height / 2)
+                                            model.player1.pos
+                                        )
+                                        |> Vector2.normalize
+                                        |> Vector2.scale 5
 
-                                else if isRectCircCollision model.player2 model.ball && model.ball.vel.x > 0 then
-                                    Vector2.scale model.ball.vel -1
+                                else if isRectCircCollision model.player2 model.ball && Vector2.getX model.ball.vel > 0 then
+                                    Vector2.sub model.ball.pos
+                                        (Vector2.setY
+                                            (Vector2.getY model.player2.pos + model.player2.height / 2)
+                                            model.player2.pos
+                                        )
+                                        |> Vector2.normalize
+                                        |> Vector2.scale 5
 
                                 else
                                     model.ball.vel
@@ -287,8 +306,8 @@ update msg model =
 viewBounds : Bool -> Svg.Svg msg
 viewBounds isPaused =
     Svg.rect
-        [ SvgAttrs.width <| String.fromInt gameBoard.x
-        , SvgAttrs.height <| String.fromInt gameBoard.y
+        [ SvgAttrs.width <| String.fromFloat <| Vector2.getX gameBoard
+        , SvgAttrs.height <| String.fromFloat <| Vector2.getY gameBoard
         , SvgAttrs.strokeWidth "1"
         , SvgAttrs.stroke "black"
         , if isPaused then
@@ -313,10 +332,10 @@ viewPaddle : Paddle -> Svg.Svg msg
 viewPaddle paddle =
     -- make size and width screen relative
     Svg.rect
-        [ SvgAttrs.height <| String.fromInt paddle.height
-        , SvgAttrs.width <| String.fromInt paddle.width
-        , SvgAttrs.x <| String.fromInt <| paddle.pos.x
-        , SvgAttrs.y <| String.fromInt <| paddle.pos.y
+        [ SvgAttrs.height <| String.fromFloat paddle.height
+        , SvgAttrs.width <| String.fromFloat paddle.width
+        , SvgAttrs.x <| String.fromFloat <| Vector2.getX paddle.pos
+        , SvgAttrs.y <| String.fromFloat <| Vector2.getY paddle.pos
         ]
         []
 
@@ -324,10 +343,10 @@ viewPaddle paddle =
 viewBall : Ball -> Svg.Svg msg
 viewBall ball =
     Svg.circle
-        [ SvgAttrs.r <| String.fromInt ball.radius
+        [ SvgAttrs.r <| String.fromFloat ball.radius
         , SvgAttrs.fill "black"
-        , SvgAttrs.cx <| String.fromInt <| ball.pos.x
-        , SvgAttrs.cy <| String.fromInt <| ball.pos.y
+        , SvgAttrs.cx <| String.fromFloat <| Vector2.getX ball.pos
+        , SvgAttrs.cy <| String.fromFloat <| Vector2.getY ball.pos
         ]
         []
 
@@ -336,8 +355,8 @@ view : Model -> Html Msg
 view model =
     Html.div [ Attributes.class "m-4" ]
         [ Svg.svg
-            [ SvgAttrs.width <| String.fromInt gameBoard.x
-            , SvgAttrs.height <| String.fromInt gameBoard.y
+            [ SvgAttrs.width <| String.fromFloat <| Vector2.getX gameBoard
+            , SvgAttrs.height <| String.fromFloat <| Vector2.getY gameBoard
             ]
             [ viewBounds model.isPause
             , viewScore model.score

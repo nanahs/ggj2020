@@ -1,32 +1,62 @@
-module Vector2 exposing (Vector2, add, centerPoint, scale, sub, zero)
+module Vector2 exposing (Vector2, add, centerPoint, create, getX, getY, normalize, scale, setY, sub, zero)
 
 
-type alias Vector2 =
-    { x : Int
-    , y : Int
-    }
+type Vector2
+    = Vector2
+        { x : Float
+        , y : Float
+        }
+
+
+create : { x : Float, y : Float } -> Vector2
+create =
+    Vector2
+
+
+getX : Vector2 -> Float
+getX (Vector2 { x, y }) =
+    x
+
+
+getY : Vector2 -> Float
+getY (Vector2 { x, y }) =
+    y
+
+
+setY : Float -> Vector2 -> Vector2
+setY y (Vector2 vec) =
+    Vector2 { vec | y = y }
 
 
 zero : Vector2
 zero =
-    { x = 0, y = 0 }
+    Vector2 { x = 0, y = 0 }
 
 
 add : Vector2 -> Vector2 -> Vector2
-add f s =
-    { x = f.x + s.x, y = f.y + s.y }
+add (Vector2 f) (Vector2 s) =
+    Vector2 { x = f.x + s.x, y = f.y + s.y }
 
 
 sub : Vector2 -> Vector2 -> Vector2
-sub f s =
-    { x = f.x - s.x, y = f.y - s.y }
+sub (Vector2 f) (Vector2 s) =
+    Vector2 { x = f.x - s.x, y = f.y - s.y }
 
 
-scale : Vector2 -> Int -> Vector2
-scale { x, y } scaler =
-    { x = x * scaler, y = y * scaler }
+normalize : Vector2 -> Vector2
+normalize (Vector2 { x, y }) =
+    let
+        len =
+            sqrt <| (x * x) + (y * y)
+    in
+    Vector2 { x = x / len, y = y / len }
 
 
-centerPoint : { height : Int, width : Int } -> Vector2
+scale : Int -> Vector2 -> Vector2
+scale scaler (Vector2 { x, y }) =
+    Vector2 { x = x * toFloat scaler, y = y * toFloat scaler }
+
+
+centerPoint : { height : Float, width : Float } -> Vector2
 centerPoint { height, width } =
-    { x = width // 2, y = height // 2 }
+    Vector2 { x = width / 2, y = height / 2 }
