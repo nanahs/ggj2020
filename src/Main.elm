@@ -11,19 +11,24 @@ import Vector2 as Vector2 exposing (Vector2)
 
 
 type alias Model =
-    { score : ( Int, Int )
+    { score :
+        { p1 : Int
+        , p2 : Int
+        }
     , player1 : Paddle
     , player2 : Paddle
     , ball : Ball
     , isPause : Bool
     , p1Up : KeyState
     , p1Down : KeyState
+    , p2Up : KeyState
+    , p2Down : KeyState
+    , p1RecentScore : Bool
     }
 
 
 type Msg
-    = UpdateScore ( Int, Int )
-    | Input KeyState Input
+    = Input KeyState Input
     | Tick Float
     | PauseGame
 
@@ -42,25 +47,47 @@ type alias Paddle =
     }
 
 
+type KeyState
+    = Up
+    | Down
+
+
+type Input
+    = P1MoveUp
+    | P1MoveDown
+    | P2MoveUp
+    | P2MoveDown
+    | Pause
+    | MoveBall
+
+
+init : Value -> ( Model, Cmd Msg )
+init _ =
+    ( initialModel, Cmd.none )
+
+
 initialModel : Model
 initialModel =
     let
         { h, w } =
             { h = 75, w = 10 }
     in
-    { score = ( 0, 0 )
+    { score = { p1 = 0, p2 = 0 }
     , player1 = { pos = Vector2.zero, height = h, width = w }
     , player2 = { pos = Vector2.sub gameBoard { x = w, y = (h // 2) + (gameBoard.y // 2) }, height = h, width = w }
-    , ball = initBall
+    , ball = initBall 0
     , isPause = False
     , p1Up = Up
     , p1Down = Up
+    , p2Up = Up
+    , p2Down = Up
+    , p1RecentScore = True
     }
 
 
-initBall : Ball
-initBall =
-    { vel = { x = -5, y = 0 }
+initBall : Int -> Ball
+initBall xVel =
+    { vel = { x = xVel, y = 0 }
     , pos = { x = gameBoard.x // 2, y = gameBoard.y // 2 }
     , radius = 10
     }
@@ -122,30 +149,45 @@ isRectCircCollision paddle ball =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        UpdateScore newScore ->
-            ( { model | score = newScore }, Cmd.none )
-
         Input keyState input ->
             ( case input of
-                MoveUp ->
+                P1MoveUp ->
                     { model | p1Up = keyState }
 
-                MoveDown ->
+                P1MoveDown ->
                     { model | p1Down = keyState }
+
+                P2MoveUp ->
+                    { model | p2Up = keyState }
+
+                P2MoveDown ->
+                    { model | p2Down = keyState }
 
                 Pause ->
                     { model | isPause = not model.isPause }
+
+                MoveBall ->
+                    if model.p1RecentScore && model.ball.vel == Vector2.zero then
+                        { model | ball = initBall -5 }
+
+                    else if model.ball.vel == Vector2.zero then
+                        { model | ball = initBall 5 }
+
+                    else
+                        model
             , Cmd.none
             )
 
         --TODO use delta time to remove reliance on animatin frame rate
         Tick _ ->
-            --updating positions only allowed in the Tick
             let
-                loc =
+                p1Loc =
                     model.player1.pos
 
-                offsetY =
+                p2Loc =
+                    model.player2.pos
+
+                p1OffsetY =
                     case ( model.p1Down, model.p1Up ) of
                         ( Down, Up ) ->
                             1
@@ -156,73 +198,86 @@ update msg model =
                         ( _, _ ) ->
                             0
 
-                newLoc =
-                    clampY 0 (gameBoard.y - model.player1.height) { loc | y = loc.y + (offsetY * 5) }
+                p2OffsetY =
+                    case ( model.p2Down, model.p2Up ) of
+                        ( Down, Up ) ->
+                            1
+
+                        ( Up, Down ) ->
+                            -1
+
+                        ( _, _ ) ->
+                            0
+
+                paddleNewLoc =
+                    clampY 0 (gameBoard.y - model.player1.height)
+
+                p1NewLoc =
+                    paddleNewLoc { p1Loc | y = p1Loc.y + (p1OffsetY * 5) }
+
+                p2NewLoc =
+                    paddleNewLoc { p2Loc | y = p2Loc.y + (p2OffsetY * 5) }
 
                 --Ball movement
                 ballNewLoc =
                     Vector2.add model.ball.pos model.ball.vel
                         |> clampY model.ball.radius (gameBoard.y - model.ball.radius)
                         |> clampX model.ball.radius (gameBoard.x - model.ball.radius)
+
+                score =
+                    model.score
+
+                maybeNewScore =
+                    if ballNewLoc.x <= model.ball.radius then
+                        Just { score | p2 = score.p2 + 1 }
+
+                    else if ballNewLoc.x >= gameBoard.x - model.ball.radius then
+                        Just { score | p1 = score.p1 + 1 }
+
+                    else
+                        Nothing
             in
             ( { model
-                | player1 = { pos = newLoc, height = model.player1.height, width = model.player1.width }
+                | score =
+                    case maybeNewScore of
+                        Just newScore ->
+                            newScore
+
+                        Nothing ->
+                            model.score
+                , player1 = { pos = p1NewLoc, height = model.player1.height, width = model.player1.width }
+                , player2 = { pos = p2NewLoc, height = model.player2.height, width = model.player2.width }
                 , ball =
-                    { pos = ballNewLoc
-                    , vel =
-                        if isRectCircCollision model.player1 model.ball && model.ball.vel.x < 0 then
-                            Vector2.scale model.ball.vel -1
+                    case maybeNewScore of
+                        Just _ ->
+                            initBall 0
 
-                        else if isRectCircCollision model.player2 model.ball && model.ball.vel.x > 0 then
-                            Vector2.scale model.ball.vel -1
+                        Nothing ->
+                            { pos = ballNewLoc
+                            , vel =
+                                if isRectCircCollision model.player1 model.ball && model.ball.vel.x < 0 then
+                                    Vector2.scale model.ball.vel -1
 
-                        else
-                            model.ball.vel
-                    , radius = model.ball.radius
-                    }
+                                else if isRectCircCollision model.player2 model.ball && model.ball.vel.x > 0 then
+                                    Vector2.scale model.ball.vel -1
+
+                                else
+                                    model.ball.vel
+                            , radius = model.ball.radius
+                            }
+                , p1RecentScore =
+                    case maybeNewScore of
+                        Just newScore ->
+                            model.score.p1 /= newScore.p1
+
+                        Nothing ->
+                            model.p1RecentScore
               }
             , Cmd.none
             )
 
         PauseGame ->
             ( model, Cmd.none )
-
-
-type KeyState
-    = Up
-    | Down
-
-
-type Input
-    = MoveUp
-    | MoveDown
-    | Pause
-
-
-toInput : KeyState -> String -> Decoder Msg
-toInput keyState str =
-    case str of
-        "ArrowUp" ->
-            Decode.succeed <| Input keyState MoveUp
-
-        "ArrowDown" ->
-            Decode.succeed <| Input keyState MoveDown
-
-        "Escape" ->
-            case keyState of
-                Up ->
-                    Decode.succeed <| Input Up Pause
-
-                _ ->
-                    Decode.fail ""
-
-        _ ->
-            Decode.fail ""
-
-
-init : Value -> ( Model, Cmd Msg )
-init _ =
-    ( initialModel, Cmd.none )
 
 
 
@@ -245,8 +300,8 @@ viewBounds isPaused =
         []
 
 
-viewScore : ( Int, Int ) -> Svg.Svg msg
-viewScore ( p1, p2 ) =
+viewScore : { p1 : Int, p2 : Int } -> Svg.Svg msg
+viewScore { p1, p2 } =
     Svg.text_
         [ SvgAttrs.x "440"
         , SvgAttrs.y "20"
@@ -311,15 +366,58 @@ subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
         [ Browser.Events.onKeyDown <|
-            Decode.andThen (toInput Down) (Decode.field "key" Decode.string)
+            Decode.andThen (decodeInput Down) (Decode.field "key" Decode.string)
         , Browser.Events.onKeyUp <|
-            Decode.andThen (toInput Up) (Decode.field "key" Decode.string)
-        , Browser.Events.onAnimationFrameDelta
-            (\f ->
-                if model.isPause then
-                    PauseGame
+            Decode.andThen (decodeInput Up) (Decode.field "key" Decode.string)
+        , if model.isPause then
+            Sub.none
 
-                else
-                    Tick <| f / 1000
-            )
+          else
+            Browser.Events.onAnimationFrameDelta
+                (\f ->
+                    if model.isPause then
+                        PauseGame
+
+                    else
+                        Tick <| f / 1000
+                )
         ]
+
+
+
+-- Decoder
+
+
+decodeInput : KeyState -> String -> Decoder Msg
+decodeInput keyState str =
+    case str of
+        "ArrowUp" ->
+            Decode.succeed <| Input keyState P1MoveUp
+
+        "ArrowDown" ->
+            Decode.succeed <| Input keyState P1MoveDown
+
+        "w" ->
+            Decode.succeed <| Input keyState P2MoveUp
+
+        "s" ->
+            Decode.succeed <| Input keyState P2MoveDown
+
+        "Escape" ->
+            case keyState of
+                Up ->
+                    Decode.succeed <| Input Up Pause
+
+                _ ->
+                    Decode.fail ""
+
+        " " ->
+            case keyState of
+                Up ->
+                    Decode.succeed <| Input Up MoveBall
+
+                _ ->
+                    Decode.fail ""
+
+        _ ->
+            Decode.fail ""
