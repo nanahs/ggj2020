@@ -52,9 +52,9 @@ normalize (Vector2 { x, y }) =
     Vector2 { x = x / len, y = y / len }
 
 
-scale : Int -> Vector2 -> Vector2
+scale : Float -> Vector2 -> Vector2
 scale scaler (Vector2 { x, y }) =
-    Vector2 { x = x * toFloat scaler, y = y * toFloat scaler }
+    Vector2 { x = x * scaler, y = y * scaler }
 
 
 centerPoint : { height : Float, width : Float } -> Vector2

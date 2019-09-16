@@ -70,10 +70,10 @@ initialModel : Model
 initialModel =
     let
         { h, w } =
-            { h = 75, w = 10 }
+            { h = 40, w = 10 }
     in
     { score = { p1 = 0, p2 = 0 }
-    , player1 = { pos = Vector2.zero, height = h, width = w }
+    , player1 = { pos = Vector2.create { x = 0, y = (Vector2.getY gameBoard / 2) - h / 2 }, height = h, width = w }
     , player2 = { pos = Vector2.sub gameBoard <| Vector2.create { x = w, y = (h / 2) + (Vector2.getY gameBoard / 2) }, height = h, width = w }
     , ball = initBall 0
     , isPause = False
@@ -89,7 +89,7 @@ initBall : Float -> Ball
 initBall xVel =
     { vel = Vector2.create { x = xVel, y = 0 }
     , pos = Vector2.create { x = Vector2.getX gameBoard / 2, y = Vector2.getY gameBoard / 2 }
-    , radius = 10
+    , radius = 5
     }
 
 
@@ -120,8 +120,8 @@ clampX min max vect2 =
 gameBoard : Vector2
 gameBoard =
     Vector2.create
-        { x = 896
-        , y = 504
+        { x = 160
+        , y = 192
         }
 
 
@@ -175,10 +175,10 @@ update msg model =
 
                 MoveBall ->
                     if model.p1RecentScore && model.ball.vel == Vector2.zero then
-                        { model | ball = initBall -5 }
+                        { model | ball = initBall -1 }
 
                     else if model.ball.vel == Vector2.zero then
-                        { model | ball = initBall 5 }
+                        { model | ball = initBall 1 }
 
                     else
                         model
@@ -263,22 +263,22 @@ update msg model =
                             { pos = ballNewLoc
                             , vel =
                                 if isRectCircCollision model.player1 model.ball && Vector2.getX model.ball.vel < 0 then
-                                    Vector2.sub model.ball.pos
-                                        (Vector2.setY
-                                            (Vector2.getY model.player1.pos + model.player1.height / 2)
-                                            model.player1.pos
-                                        )
-                                        |> Vector2.normalize
-                                        |> Vector2.scale 5
+                                    let
+                                        centerP1 =
+                                            Vector2.setY
+                                                (Vector2.getY model.player1.pos + model.player1.height / 2)
+                                                model.player1.pos
+                                    in
+                                    Vector2.create { x = Vector2.getX model.ball.vel * -1, y = Vector2.getY <| Vector2.sub model.ball.pos centerP1 }
 
                                 else if isRectCircCollision model.player2 model.ball && Vector2.getX model.ball.vel > 0 then
-                                    Vector2.sub model.ball.pos
-                                        (Vector2.setY
-                                            (Vector2.getY model.player2.pos + model.player2.height / 2)
-                                            model.player2.pos
-                                        )
-                                        |> Vector2.normalize
-                                        |> Vector2.scale 5
+                                    let
+                                        centerP2 =
+                                            Vector2.setY
+                                                (Vector2.getY model.player2.pos + model.player2.height / 2)
+                                                model.player2.pos
+                                    in
+                                    Vector2.create { x = Vector2.getX model.ball.vel * -1, y = Vector2.getY <| Vector2.sub model.ball.pos centerP2 }
 
                                 else if Vector2.getY ballNewLoc <= model.ball.radius then
                                     Vector2.setY (Vector2.getY model.ball.vel * -1) model.ball.vel
@@ -315,23 +315,24 @@ viewBounds isPaused =
         [ SvgAttrs.width <| String.fromFloat <| Vector2.getX gameBoard
         , SvgAttrs.height <| String.fromFloat <| Vector2.getY gameBoard
         , SvgAttrs.strokeWidth "1"
-        , SvgAttrs.stroke "black"
+        , SvgAttrs.stroke "white"
         , if isPaused then
-            SvgAttrs.fill "grey"
+            SvgAttrs.class "text-gray-500 fill-current"
 
           else
-            SvgAttrs.fill "white"
+            blackAttr
         ]
         []
 
 
-viewScore : { p1 : Int, p2 : Int } -> Svg.Svg msg
-viewScore { p1, p2 } =
+viewScore : Int -> Float -> Svg.Svg msg
+viewScore score xPos =
     Svg.text_
-        [ SvgAttrs.x "440"
+        [ SvgAttrs.x <| String.fromFloat xPos
         , SvgAttrs.y "20"
+        , SvgAttrs.class "text-gray-200 fill-current "
         ]
-        [ Svg.text <| String.join " " [ String.fromInt p1, "-", String.fromInt p2 ] ]
+        [ Svg.text <| String.fromInt score ]
 
 
 viewPaddle : Paddle -> Svg.Svg msg
@@ -342,34 +343,69 @@ viewPaddle paddle =
         , SvgAttrs.width <| String.fromFloat paddle.width
         , SvgAttrs.x <| String.fromFloat <| Vector2.getX paddle.pos
         , SvgAttrs.y <| String.fromFloat <| Vector2.getY paddle.pos
+        , grayAttr
         ]
         []
+
+
+grayAttr : Svg.Attribute msg
+grayAttr =
+    SvgAttrs.class "text-gray-200 fill-current stroke-current"
+
+
+blackAttr : Svg.Attribute msg
+blackAttr =
+    SvgAttrs.class "text-gray-900 fill-current"
 
 
 viewBall : Ball -> Svg.Svg msg
 viewBall ball =
     Svg.circle
         [ SvgAttrs.r <| String.fromFloat ball.radius
-        , SvgAttrs.fill "black"
         , SvgAttrs.cx <| String.fromFloat <| Vector2.getX ball.pos
         , SvgAttrs.cy <| String.fromFloat <| Vector2.getY ball.pos
+        , grayAttr
         ]
         []
 
 
+viewMidLine : Svg.Svg msg
+viewMidLine =
+    Svg.line
+        [ SvgAttrs.x1 <| String.fromFloat <| Vector2.getX gameBoard / 2
+        , SvgAttrs.x2 <| String.fromFloat <| Vector2.getX gameBoard / 2
+        , SvgAttrs.y1 "0"
+        , SvgAttrs.y2 <| String.fromFloat <| Vector2.getY gameBoard
+        , SvgAttrs.strokeWidth "1"
+        , SvgAttrs.strokeDasharray "4 2"
+        , grayAttr
+        ]
+        []
+
+
+drawGame : Model -> Html Msg
+drawGame model =
+    Svg.svg
+        [ List.map String.fromFloat [ 0, 0, Vector2.getX gameBoard, Vector2.getY gameBoard ]
+            |> String.join " "
+            |> SvgAttrs.viewBox
+        , SvgAttrs.width "100%"
+        ]
+        [ viewBounds model.isPause
+        , viewMidLine
+        , viewScore model.score.p1 <| Vector2.getX gameBoard / 4
+        , viewScore model.score.p2 <| (Vector2.getX gameBoard / 4) * 3
+        , viewPaddle model.player1
+        , viewPaddle model.player2
+        , viewBall model.ball
+        ]
+
+
 view : Model -> Html Msg
 view model =
-    Html.div [ Attributes.class "m-4" ]
-        [ Svg.svg
-            [ SvgAttrs.width <| String.fromFloat <| Vector2.getX gameBoard
-            , SvgAttrs.height <| String.fromFloat <| Vector2.getY gameBoard
-            ]
-            [ viewBounds model.isPause
-            , viewScore model.score
-            , viewPaddle model.player1
-            , viewPaddle model.player2
-            , viewBall model.ball
-            ]
+    Html.div [ Attributes.class "flex justify-center h-screen bg-gray-900" ]
+        [ Html.div [ Attributes.class "flex flex-col justify-center h-screen", Attributes.style "width" "600px" ]
+            [ drawGame model ]
         ]
 
 
