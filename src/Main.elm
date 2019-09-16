@@ -188,42 +188,33 @@ update msg model =
         --TODO use delta time to remove reliance on animatin frame rate
         Tick _ ->
             let
-                p1Loc =
-                    model.player1.pos
-
-                p2Loc =
-                    model.player2.pos
-
                 p1OffsetY =
-                    case ( model.p1Down, model.p1Up ) of
-                        ( Down, Up ) ->
-                            1
+                    (*) 5 <|
+                        case ( model.p1Down, model.p1Up ) of
+                            ( Down, Up ) ->
+                                1
 
-                        ( Up, Down ) ->
-                            -1
+                            ( Up, Down ) ->
+                                -1
 
-                        ( _, _ ) ->
-                            0
+                            ( _, _ ) ->
+                                0
 
                 p2OffsetY =
-                    case ( model.p2Down, model.p2Up ) of
-                        ( Down, Up ) ->
-                            1
+                    (*) 5 <|
+                        case ( model.p2Down, model.p2Up ) of
+                            ( Down, Up ) ->
+                                1
 
-                        ( Up, Down ) ->
-                            -1
+                            ( Up, Down ) ->
+                                -1
 
-                        ( _, _ ) ->
-                            0
+                            ( _, _ ) ->
+                                0
 
-                paddleNewLoc =
-                    clampY 0 (Vector2.getY gameBoard - model.player1.height)
-
-                p1NewLoc =
-                    paddleNewLoc <| Vector2.setY (Vector2.getY p1Loc + (p1OffsetY * 5)) p1Loc
-
-                p2NewLoc =
-                    paddleNewLoc <| Vector2.setY (Vector2.getY p2Loc + (p2OffsetY * 5)) p2Loc
+                paddleNewLoc pos offSet height =
+                    Vector2.setY (Vector2.getY pos + offSet) pos
+                        |> clampY 0 (Vector2.getY gameBoard - height)
 
                 --Ball movement
                 ballNewLoc =
@@ -231,15 +222,12 @@ update msg model =
                         |> clampY model.ball.radius (Vector2.getY gameBoard - model.ball.radius)
                         |> clampX model.ball.radius (Vector2.getX gameBoard - model.ball.radius)
 
-                score =
-                    model.score
-
                 maybeNewScore =
                     if Vector2.getX ballNewLoc <= model.ball.radius then
-                        Just { score | p2 = score.p2 + 1 }
+                        Just { p1 = model.score.p1, p2 = model.score.p2 + 1 }
 
                     else if Vector2.getX ballNewLoc >= Vector2.getX gameBoard - model.ball.radius then
-                        Just { score | p1 = score.p1 + 1 }
+                        Just { p1 = model.score.p1 + 1, p2 = model.score.p2 }
 
                     else
                         Nothing
@@ -252,8 +240,16 @@ update msg model =
 
                         Nothing ->
                             model.score
-                , player1 = { pos = p1NewLoc, height = model.player1.height, width = model.player1.width }
-                , player2 = { pos = p2NewLoc, height = model.player2.height, width = model.player2.width }
+                , player1 =
+                    { pos = paddleNewLoc model.player1.pos p1OffsetY model.player1.height
+                    , height = model.player1.height
+                    , width = model.player1.width
+                    }
+                , player2 =
+                    { pos = paddleNewLoc model.player2.pos p2OffsetY model.player2.height
+                    , height = model.player2.height
+                    , width = model.player2.width
+                    }
                 , ball =
                     case maybeNewScore of
                         Just _ ->
@@ -309,6 +305,16 @@ update msg model =
 -- VIEW
 
 
+grayAttr : Svg.Attribute msg
+grayAttr =
+    SvgAttrs.class "text-gray-200 fill-current stroke-current"
+
+
+blackAttr : Svg.Attribute msg
+blackAttr =
+    SvgAttrs.class "text-gray-900 fill-current"
+
+
 viewBounds : Bool -> Svg.Svg msg
 viewBounds isPaused =
     Svg.rect
@@ -325,6 +331,20 @@ viewBounds isPaused =
         []
 
 
+viewMidLine : Svg.Svg msg
+viewMidLine =
+    Svg.line
+        [ SvgAttrs.x1 <| String.fromFloat <| Vector2.getX gameBoard / 2
+        , SvgAttrs.x2 <| String.fromFloat <| Vector2.getX gameBoard / 2
+        , SvgAttrs.y1 "0"
+        , SvgAttrs.y2 <| String.fromFloat <| Vector2.getY gameBoard
+        , SvgAttrs.strokeWidth "1"
+        , SvgAttrs.strokeDasharray "4 2"
+        , grayAttr
+        ]
+        []
+
+
 viewScore : Int -> Float -> Svg.Svg msg
 viewScore score xPos =
     Svg.text_
@@ -337,7 +357,6 @@ viewScore score xPos =
 
 viewPaddle : Paddle -> Svg.Svg msg
 viewPaddle paddle =
-    -- make size and width screen relative
     Svg.rect
         [ SvgAttrs.height <| String.fromFloat paddle.height
         , SvgAttrs.width <| String.fromFloat paddle.width
@@ -348,36 +367,12 @@ viewPaddle paddle =
         []
 
 
-grayAttr : Svg.Attribute msg
-grayAttr =
-    SvgAttrs.class "text-gray-200 fill-current stroke-current"
-
-
-blackAttr : Svg.Attribute msg
-blackAttr =
-    SvgAttrs.class "text-gray-900 fill-current"
-
-
 viewBall : Ball -> Svg.Svg msg
 viewBall ball =
     Svg.circle
         [ SvgAttrs.r <| String.fromFloat ball.radius
         , SvgAttrs.cx <| String.fromFloat <| Vector2.getX ball.pos
         , SvgAttrs.cy <| String.fromFloat <| Vector2.getY ball.pos
-        , grayAttr
-        ]
-        []
-
-
-viewMidLine : Svg.Svg msg
-viewMidLine =
-    Svg.line
-        [ SvgAttrs.x1 <| String.fromFloat <| Vector2.getX gameBoard / 2
-        , SvgAttrs.x2 <| String.fromFloat <| Vector2.getX gameBoard / 2
-        , SvgAttrs.y1 "0"
-        , SvgAttrs.y2 <| String.fromFloat <| Vector2.getY gameBoard
-        , SvgAttrs.strokeWidth "1"
-        , SvgAttrs.strokeDasharray "4 2"
         , grayAttr
         ]
         []
