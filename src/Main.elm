@@ -2,28 +2,25 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
+import Entity exposing (Entity)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Json.Decode as Decode exposing (Decoder, Value)
+import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
+import Tile exposing (Tile)
+import Tilemap exposing (Tilemap)
 import Vector2 as Vector2 exposing (Vector2)
 
 
 type alias Model =
-    { score :
-        { p1 : Int
-        , p2 : Int
-        }
-    , player1 : Paddle
-    , player2 : Paddle
-    , ball : Ball
-    , isPause : Bool
-    , p1Up : KeyState
-    , p1Down : KeyState
-    , p2Up : KeyState
-    , p2Down : KeyState
-    , p1RecentScore : Bool
+    { isPause : Bool
+    , player : Player
+    , tilemap : Tilemap
+    , jump : KeyState
+    , left : KeyState
+    , right : KeyState
     }
 
 
@@ -33,32 +30,16 @@ type Msg
     | PauseGame
 
 
-type alias Ball =
-    { pos : Vector2
-    , vel : Vector2
-    , radius : Float
-    }
-
-
-type alias Paddle =
-    { height : Float
-    , width : Float
-    , pos : Vector2
-    }
-
-
 type KeyState
     = Up
     | Down
 
 
 type Input
-    = P1MoveUp
-    | P1MoveDown
-    | P2MoveUp
-    | P2MoveDown
+    = Jump
+    | MoveLeft
+    | MoveRight
     | Pause
-    | MoveBall
 
 
 init : Value -> ( Model, Cmd Msg )
@@ -68,28 +49,56 @@ init _ =
 
 initialModel : Model
 initialModel =
-    let
-        { h, w } =
-            { h = 40, w = 10 }
-    in
-    { score = { p1 = 0, p2 = 0 }
-    , player1 = { pos = Vector2.create { x = 0, y = (Vector2.getY gameBoard / 2) - h / 2 }, height = h, width = w }
-    , player2 = { pos = Vector2.sub gameBoard <| Vector2.create { x = w, y = (h / 2) + (Vector2.getY gameBoard / 2) }, height = h, width = w }
-    , ball = initBall 0
-    , isPause = False
-    , p1Up = Up
-    , p1Down = Up
-    , p2Up = Up
-    , p2Down = Up
-    , p1RecentScore = True
-    }
-
-
-initBall : Float -> Ball
-initBall xVel =
-    { vel = Vector2.create { x = xVel, y = 0 }
-    , pos = Vector2.create { x = Vector2.getX gameBoard / 2, y = Vector2.getY gameBoard / 2 }
-    , radius = 5
+    { isPause = False
+    , player = Player.initPlayer <| Vector2.create { x = 0, y = 16 * 6 }
+    , tilemap =
+        Tilemap.initTilemap
+            { tiles =
+                [ Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.empty
+                , Tile.wallTop
+                , Tile.wallTop
+                , Tile.wallTop
+                , Tile.wallTop
+                , Tile.wallTop
+                , Tile.wallTop
+                ]
+            , tileHeight = 16
+            , tileWidth = 16
+            , cols = 6
+            , rows = 6
+            }
+    , jump = Up
+    , left = Up
+    , right = Up
     }
 
 
@@ -117,36 +126,28 @@ clampX min max vect2 =
         vect2
 
 
-gameBoard : Vector2
-gameBoard =
+gravity : Vector2
+gravity =
     Vector2.create
-        { x = 160
-        , y = 192
+        { x = 0
+        , y = 1
         }
 
 
-isRectCircCollision : Paddle -> Ball -> Bool
-isRectCircCollision paddle ball =
-    let
-        nearestX =
-            max (Vector2.getX paddle.pos) <|
-                min (Vector2.getX ball.pos) <|
-                    Vector2.getX paddle.pos
-                        + paddle.width
+jumpForce : Float -> Vector2
+jumpForce x =
+    Vector2.create
+        { x = x
+        , y = -90
+        }
 
-        nearestY =
-            max (Vector2.getY paddle.pos) <|
-                min (Vector2.getY ball.pos) <|
-                    Vector2.getY paddle.pos
-                        + paddle.height
 
-        deltaX =
-            Vector2.getX ball.pos - nearestX
-
-        deltaY =
-            Vector2.getY ball.pos - nearestY
-    in
-    (deltaX * deltaX + deltaY * deltaY) < (ball.radius * ball.radius)
+moveSpeed : Vector2
+moveSpeed =
+    Vector2.create
+        { x = 5
+        , y = 0
+        }
 
 
 
@@ -158,221 +159,100 @@ update msg model =
     case msg of
         Input keyState input ->
             ( case input of
-                P1MoveUp ->
-                    { model | p1Up = keyState }
+                Jump ->
+                    { model | jump = keyState }
 
-                P1MoveDown ->
-                    { model | p1Down = keyState }
+                MoveLeft ->
+                    { model | left = keyState }
 
-                P2MoveUp ->
-                    { model | p2Up = keyState }
-
-                P2MoveDown ->
-                    { model | p2Down = keyState }
+                MoveRight ->
+                    { model | right = keyState }
 
                 Pause ->
                     { model | isPause = not model.isPause }
-
-                MoveBall ->
-                    if model.p1RecentScore && model.ball.vel == Vector2.zero then
-                        { model | ball = initBall -1 }
-
-                    else if model.ball.vel == Vector2.zero then
-                        { model | ball = initBall 1 }
-
-                    else
-                        model
             , Cmd.none
             )
 
-        --TODO use delta time to remove reliance on animatin frame rate
-        Tick _ ->
-            let
-                p1OffsetY =
-                    (*) 5 <|
-                        case ( model.p1Down, model.p1Up ) of
-                            ( Down, Up ) ->
-                                1
-
-                            ( Up, Down ) ->
-                                -1
-
-                            ( _, _ ) ->
-                                0
-
-                p2OffsetY =
-                    (*) 5 <|
-                        case ( model.p2Down, model.p2Up ) of
-                            ( Down, Up ) ->
-                                1
-
-                            ( Up, Down ) ->
-                                -1
-
-                            ( _, _ ) ->
-                                0
-
-                paddleNewLoc pos offSet height =
-                    Vector2.setY (Vector2.getY pos + offSet) pos
-                        |> clampY 0 (Vector2.getY gameBoard - height)
-
-                --Ball movement
-                ballNewLoc =
-                    Vector2.add model.ball.pos model.ball.vel
-                        |> clampY model.ball.radius (Vector2.getY gameBoard - model.ball.radius)
-                        |> clampX model.ball.radius (Vector2.getX gameBoard - model.ball.radius)
-
-                maybeNewScore =
-                    if Vector2.getX ballNewLoc <= model.ball.radius then
-                        Just { p1 = model.score.p1, p2 = model.score.p2 + 1 }
-
-                    else if Vector2.getX ballNewLoc >= Vector2.getX gameBoard - model.ball.radius then
-                        Just { p1 = model.score.p1 + 1, p2 = model.score.p2 }
-
-                    else
-                        Nothing
-            in
-            ( { model
-                | score =
-                    case maybeNewScore of
-                        Just newScore ->
-                            newScore
-
-                        Nothing ->
-                            model.score
-                , player1 =
-                    { pos = paddleNewLoc model.player1.pos p1OffsetY model.player1.height
-                    , height = model.player1.height
-                    , width = model.player1.width
-                    }
-                , player2 =
-                    { pos = paddleNewLoc model.player2.pos p2OffsetY model.player2.height
-                    , height = model.player2.height
-                    , width = model.player2.width
-                    }
-                , ball =
-                    case maybeNewScore of
-                        Just _ ->
-                            initBall 0
-
-                        Nothing ->
-                            { pos = ballNewLoc
-                            , vel =
-                                if isRectCircCollision model.player1 model.ball && Vector2.getX model.ball.vel < 0 then
-                                    let
-                                        centerP1 =
-                                            Vector2.setY
-                                                (Vector2.getY model.player1.pos + model.player1.height / 2)
-                                                model.player1.pos
-                                    in
-                                    Vector2.create { x = Vector2.getX model.ball.vel * -1, y = Vector2.getY <| Vector2.sub model.ball.pos centerP1 }
-
-                                else if isRectCircCollision model.player2 model.ball && Vector2.getX model.ball.vel > 0 then
-                                    let
-                                        centerP2 =
-                                            Vector2.setY
-                                                (Vector2.getY model.player2.pos + model.player2.height / 2)
-                                                model.player2.pos
-                                    in
-                                    Vector2.create { x = Vector2.getX model.ball.vel * -1, y = Vector2.getY <| Vector2.sub model.ball.pos centerP2 }
-
-                                else if Vector2.getY ballNewLoc <= model.ball.radius then
-                                    Vector2.setY (Vector2.getY model.ball.vel * -1) model.ball.vel
-
-                                else if Vector2.getY ballNewLoc >= Vector2.getY gameBoard - model.ball.radius then
-                                    Vector2.setY (Vector2.getY model.ball.vel * -1) model.ball.vel
-
-                                else
-                                    model.ball.vel
-                            , radius = model.ball.radius
-                            }
-                , p1RecentScore =
-                    case maybeNewScore of
-                        Just newScore ->
-                            model.score.p1 /= newScore.p1
-
-                        Nothing ->
-                            model.p1RecentScore
-              }
-            , Cmd.none
-            )
+        -- Tick delta ->
+        --     ( { model
+        --         | player =
+        --             doJump model.jump model.player
+        --                 |> doMove model.left model.right
+        --                 |> Entity.updatePos delta Vector2.zero gameBoard
+        --       }
+        --     , Cmd.none
+        --     )
+        Tick delta ->
+            ( model, Cmd.none )
 
         PauseGame ->
             ( model, Cmd.none )
+
+
+doJump : KeyState -> Player -> Player
+doJump jump player =
+    case ( jump, player.canJump ) of
+        ( Down, True ) ->
+            { player | entity = Entity.setVel (jumpForce <| Vector2.getX <| Entity.velocity player.entity) player.entity }
+
+        _ ->
+            { player | entity = Entity.updateVel gravity player.entity }
+
+
+doMove : KeyState -> KeyState -> Player -> Player
+doMove left right player =
+    case ( left, right ) of
+        ( Down, Up ) ->
+            { player | entity = Entity.updateVel (Vector2.scale -1 moveSpeed) player.entity }
+
+        ( Up, Down ) ->
+            { player | entity = Entity.updateVel moveSpeed player.entity }
+
+        ( Down, Down ) ->
+            player
+
+        ( Up, Up ) ->
+            player
 
 
 
 -- VIEW
 
 
-grayAttr : Svg.Attribute msg
-grayAttr =
-    SvgAttrs.class "text-gray-200 fill-current stroke-current"
-
-
 blackAttr : Svg.Attribute msg
 blackAttr =
-    SvgAttrs.class "text-gray-900 fill-current"
+    SvgAttrs.class "text-gray-700 fill-current"
 
 
-viewBounds : Bool -> Svg.Svg msg
-viewBounds isPaused =
+grayAttr : Svg.Attribute msg
+grayAttr =
+    SvgAttrs.class "text-gray-300 fill-current"
+
+
+redAttr : Svg.Attribute msg
+redAttr =
+    SvgAttrs.class "text-red-500 fill-current"
+
+
+viewBounds : Tilemap -> Svg.Svg msg
+viewBounds map =
     Svg.rect
-        [ SvgAttrs.width <| String.fromFloat <| Vector2.getX gameBoard
-        , SvgAttrs.height <| String.fromFloat <| Vector2.getY gameBoard
+        [ SvgAttrs.width <| String.fromInt <| Tilemap.mapWidth map
+        , SvgAttrs.height <| String.fromInt <| Tilemap.mapHeight map
         , SvgAttrs.strokeWidth "1"
         , SvgAttrs.stroke "white"
-        , if isPaused then
-            SvgAttrs.class "text-gray-500 fill-current"
-
-          else
-            blackAttr
+        , blackAttr
         ]
         []
 
 
-viewMidLine : Svg.Svg msg
-viewMidLine =
-    Svg.line
-        [ SvgAttrs.x1 <| String.fromFloat <| Vector2.getX gameBoard / 2
-        , SvgAttrs.x2 <| String.fromFloat <| Vector2.getX gameBoard / 2
-        , SvgAttrs.y1 "0"
-        , SvgAttrs.y2 <| String.fromFloat <| Vector2.getY gameBoard
-        , SvgAttrs.strokeWidth "1"
-        , SvgAttrs.strokeDasharray "4 2"
-        , grayAttr
-        ]
-        []
-
-
-viewScore : Int -> Float -> Svg.Svg msg
-viewScore score xPos =
-    Svg.text_
-        [ SvgAttrs.x <| String.fromFloat xPos
-        , SvgAttrs.y "20"
-        , SvgAttrs.class "text-gray-200 fill-current "
-        ]
-        [ Svg.text <| String.fromInt score ]
-
-
-viewPaddle : Paddle -> Svg.Svg msg
-viewPaddle paddle =
+viewPlayer : Player -> Svg.Svg msg
+viewPlayer player =
     Svg.rect
-        [ SvgAttrs.height <| String.fromFloat paddle.height
-        , SvgAttrs.width <| String.fromFloat paddle.width
-        , SvgAttrs.x <| String.fromFloat <| Vector2.getX paddle.pos
-        , SvgAttrs.y <| String.fromFloat <| Vector2.getY paddle.pos
-        , grayAttr
-        ]
-        []
-
-
-viewBall : Ball -> Svg.Svg msg
-viewBall ball =
-    Svg.circle
-        [ SvgAttrs.r <| String.fromFloat ball.radius
-        , SvgAttrs.cx <| String.fromFloat <| Vector2.getX ball.pos
-        , SvgAttrs.cy <| String.fromFloat <| Vector2.getY ball.pos
+        [ SvgAttrs.width <| String.fromFloat <| Entity.width player.entity
+        , SvgAttrs.height <| String.fromFloat <| Entity.height player.entity
+        , SvgAttrs.x <| String.fromFloat <| Vector2.getX <| Entity.position player.entity
+        , SvgAttrs.y <| String.fromFloat <| Vector2.getY <| Entity.position player.entity
         , grayAttr
         ]
         []
@@ -381,25 +261,24 @@ viewBall ball =
 drawGame : Model -> Html Msg
 drawGame model =
     Svg.svg
-        [ List.map String.fromFloat [ 0, 0, Vector2.getX gameBoard, Vector2.getY gameBoard ]
+        [ List.map String.fromInt [ 0, 0, Tilemap.mapWidth model.tilemap, Tilemap.mapHeight model.tilemap ]
             |> String.join " "
             |> SvgAttrs.viewBox
         , SvgAttrs.width "100%"
         ]
-        [ viewBounds model.isPause
-        , viewMidLine
-        , viewScore model.score.p1 <| Vector2.getX gameBoard / 4
-        , viewScore model.score.p2 <| (Vector2.getX gameBoard / 4) * 3
-        , viewPaddle model.player1
-        , viewPaddle model.player2
-        , viewBall model.ball
+        [ viewBounds model.tilemap
+        , Tilemap.drawMap model.tilemap
+
+        -- , viewPlayer model.player
         ]
 
 
 view : Model -> Html Msg
 view model =
-    Html.div [ Attributes.class "flex justify-center h-screen bg-gray-900" ]
-        [ Html.div [ Attributes.class "flex flex-col justify-center h-screen", Attributes.style "width" "600px" ]
+    Html.div [ Attributes.class "flex justify-center h-screen bg-gray-700" ]
+        [ Html.div
+            [ Attributes.class "flex flex-col justify-center h-screen w-full"
+            ]
             [ drawGame model ]
         ]
 
@@ -410,7 +289,7 @@ main =
         { init = init
         , view =
             \model ->
-                { title = "PONG"
+                { title = "GGJ2020"
                 , body = [ view model ]
                 }
         , update = update
@@ -444,33 +323,49 @@ subscriptions model =
 -- Decoder
 
 
+jumpDecoder : KeyState -> Decoder Msg
+jumpDecoder keyState =
+    Decode.succeed <| Input keyState Jump
+
+
+leftDecoder : KeyState -> Decoder Msg
+leftDecoder keyState =
+    Decode.succeed <| Input keyState MoveLeft
+
+
+rightDecoder : KeyState -> Decoder Msg
+rightDecoder keyState =
+    Decode.succeed <| Input keyState MoveRight
+
+
 decodeInput : KeyState -> String -> Decoder Msg
 decodeInput keyState str =
     case str of
-        "ArrowUp" ->
-            Decode.succeed <| Input keyState P1MoveUp
+        " " ->
+            jumpDecoder keyState
 
-        "ArrowDown" ->
-            Decode.succeed <| Input keyState P1MoveDown
+        "ArrowUp" ->
+            jumpDecoder keyState
+
+        "ArrowLeft" ->
+            leftDecoder keyState
+
+        "ArrowRight" ->
+            rightDecoder keyState
 
         "w" ->
-            Decode.succeed <| Input keyState P2MoveUp
+            jumpDecoder keyState
 
-        "s" ->
-            Decode.succeed <| Input keyState P2MoveDown
+        "a" ->
+            leftDecoder keyState
+
+        "d" ->
+            rightDecoder keyState
 
         "Escape" ->
             case keyState of
                 Up ->
                     Decode.succeed <| Input Up Pause
-
-                _ ->
-                    Decode.fail ""
-
-        " " ->
-            case keyState of
-                Up ->
-                    Decode.succeed <| Input Up MoveBall
 
                 _ ->
                     Decode.fail ""
