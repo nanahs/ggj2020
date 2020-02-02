@@ -5,19 +5,20 @@ import Browser.Events
 import Entity exposing (Entity)
 import Html exposing (Html)
 import Html.Attributes as Attributes
+import Http
 import Json.Decode as Decode exposing (Decoder, Value)
 import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
 import Tile exposing (Tile)
-import Tilemap exposing (Tilemap)
+import Tiledmap exposing (Tiledmap)
 import Vector2 as Vector2 exposing (Vector2)
 
 
 type alias Model =
     { isPause : Bool
     , player : Player
-    , tilemap : Tilemap
+    , tiledmap : Maybe Tiledmap
     , jump : KeyState
     , left : KeyState
     , right : KeyState
@@ -28,6 +29,7 @@ type Msg
     = Input KeyState Input
     | Tick Float
     | PauseGame
+    | LevelLoaded (Result Http.Error Tiledmap)
 
 
 type KeyState
@@ -44,58 +46,19 @@ type Input
 
 init : Value -> ( Model, Cmd Msg )
 init _ =
-    ( initialModel, Cmd.none )
+    ( initialModel
+    , Http.get
+        { url = "./public/assets/map.json"
+        , expect = Http.expectJson LevelLoaded Tiledmap.decoder
+        }
+    )
 
 
 initialModel : Model
 initialModel =
     { isPause = False
     , player = Player.initPlayer <| Vector2.create { x = 0, y = 16 * 6 }
-    , tilemap =
-        Tilemap.initTilemap
-            { tiles =
-                [ Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.empty
-                , Tile.wallTop
-                , Tile.wallTop
-                , Tile.wallTop
-                , Tile.wallTop
-                , Tile.wallTop
-                , Tile.wallTop
-                ]
-            , tileHeight = 16
-            , tileWidth = 16
-            , cols = 6
-            , rows = 6
-            }
+    , tiledmap = Nothing
     , jump = Up
     , left = Up
     , right = Up
@@ -188,6 +151,25 @@ update msg model =
         PauseGame ->
             ( model, Cmd.none )
 
+        LevelLoaded (Ok tiledmap) ->
+            ( { model | tiledmap = Just tiledmap }, Cmd.none )
+
+        LevelLoaded (Err e) ->
+            let
+                _ =
+                    Debug.log "error: " <|
+                        case e of
+                            Http.BadUrl str ->
+                                str
+
+                            Http.BadBody str ->
+                                str
+
+                            _ ->
+                                "other err"
+            in
+            ( model, Cmd.none )
+
 
 doJump : KeyState -> Player -> Player
 doJump jump player =
@@ -234,18 +216,6 @@ redAttr =
     SvgAttrs.class "text-red-500 fill-current"
 
 
-viewBounds : Tilemap -> Svg.Svg msg
-viewBounds map =
-    Svg.rect
-        [ SvgAttrs.width <| String.fromInt <| Tilemap.mapWidth map
-        , SvgAttrs.height <| String.fromInt <| Tilemap.mapHeight map
-        , SvgAttrs.strokeWidth "1"
-        , SvgAttrs.stroke "white"
-        , blackAttr
-        ]
-        []
-
-
 viewPlayer : Player -> Svg.Svg msg
 viewPlayer player =
     Svg.rect
@@ -260,17 +230,9 @@ viewPlayer player =
 
 drawGame : Model -> Html Msg
 drawGame model =
-    Svg.svg
-        [ List.map String.fromInt [ 0, 0, Tilemap.mapWidth model.tilemap, Tilemap.mapHeight model.tilemap ]
-            |> String.join " "
-            |> SvgAttrs.viewBox
-        , SvgAttrs.width "100%"
-        ]
-        [ viewBounds model.tilemap
-        , Tilemap.drawMap model.tilemap
-
-        -- , viewPlayer model.player
-        ]
+    model.tiledmap
+        |> Maybe.map Tiledmap.view
+        |> Maybe.withDefault (Html.text "NO MAP!")
 
 
 view : Model -> Html Msg
@@ -279,7 +241,8 @@ view model =
         [ Html.div
             [ Attributes.class "flex flex-col justify-center h-screen w-full"
             ]
-            [ drawGame model ]
+            [ drawGame model
+            ]
         ]
 
 
@@ -304,18 +267,18 @@ subscriptions model =
             Decode.andThen (decodeInput Down) (Decode.field "key" Decode.string)
         , Browser.Events.onKeyUp <|
             Decode.andThen (decodeInput Up) (Decode.field "key" Decode.string)
-        , if model.isPause then
-            Sub.none
 
-          else
-            Browser.Events.onAnimationFrameDelta
-                (\f ->
-                    if model.isPause then
-                        PauseGame
-
-                    else
-                        Tick <| f / 1000
-                )
+        -- , if model.isPause then
+        --     Sub.none
+        --   else
+        --     Browser.Events.onAnimationFrameDelta
+        --         (\f ->
+        --             if model.isPause then
+        --                 PauseGame
+        --             else
+        --                 Tick <| f / 1000
+        --         )
+        , Sub.none
         ]
 
 
