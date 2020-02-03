@@ -2,6 +2,7 @@ module Main exposing (main)
 
 import Browser
 import Browser.Events
+import Constants
 import Entity exposing (Entity)
 import Html exposing (Html)
 import Html.Attributes as Attributes
@@ -18,10 +19,7 @@ import Vector2 as Vector2 exposing (Vector2)
 type alias Model =
     { isPause : Bool
     , player : Player
-    , tiledmap : Maybe Tiledmap
-    , jump : KeyState
-    , left : KeyState
-    , right : KeyState
+    , map : Maybe Tiledmap
     }
 
 
@@ -38,7 +36,8 @@ type KeyState
 
 
 type Input
-    = Jump
+    = MoveUp
+    | MoveDown
     | MoveLeft
     | MoveRight
     | Pause
@@ -48,7 +47,7 @@ init : Value -> ( Model, Cmd Msg )
 init _ =
     ( initialModel
     , Http.get
-        { url = "./public/assets/map.json"
+        { url = String.concat [ Constants.assetDir, "map.json" ]
         , expect = Http.expectJson LevelLoaded Tiledmap.decoder
         }
     )
@@ -57,11 +56,8 @@ init _ =
 initialModel : Model
 initialModel =
     { isPause = False
-    , player = Player.initPlayer <| Vector2.create { x = 0, y = 16 * 6 }
-    , tiledmap = Nothing
-    , jump = Up
-    , left = Up
-    , right = Up
+    , player = Player.initPlayer <| Vector2.create { x = 32, y = 32 }
+    , map = Nothing
     }
 
 
@@ -89,30 +85,6 @@ clampX min max vect2 =
         vect2
 
 
-gravity : Vector2
-gravity =
-    Vector2.create
-        { x = 0
-        , y = 1
-        }
-
-
-jumpForce : Float -> Vector2
-jumpForce x =
-    Vector2.create
-        { x = x
-        , y = -90
-        }
-
-
-moveSpeed : Vector2
-moveSpeed =
-    Vector2.create
-        { x = 5
-        , y = 0
-        }
-
-
 
 -- UPDATE
 
@@ -121,20 +93,58 @@ update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
         Input keyState input ->
-            ( case input of
-                Jump ->
-                    { model | jump = keyState }
+            Maybe.map
+                (\map ->
+                    let
+                        player =
+                            model.player
 
-                MoveLeft ->
-                    { model | left = keyState }
+                        height =
+                            Tiledmap.tileHeight map
 
-                MoveRight ->
-                    { model | right = keyState }
+                        width =
+                            Tiledmap.tileWidth map
 
-                Pause ->
-                    { model | isPause = not model.isPause }
-            , Cmd.none
-            )
+                        newPlayer =
+                            { player
+                                | pos =
+                                    case ( input, keyState ) of
+                                        ( MoveUp, Down ) ->
+                                            Vector2.add player.pos (Vector2.create { x = 0, y = toFloat <| height * -1 })
+
+                                        ( MoveDown, Down ) ->
+                                            Vector2.add player.pos (Vector2.create { x = 0, y = toFloat height })
+
+                                        ( MoveLeft, Down ) ->
+                                            Vector2.add player.pos (Vector2.create { x = toFloat <| width * -1, y = 0 })
+
+                                        ( MoveRight, Down ) ->
+                                            Vector2.add player.pos (Vector2.create { x = toFloat width, y = 0 })
+
+                                        _ ->
+                                            player.pos
+                            }
+                    in
+                    ( case input of
+                        MoveUp ->
+                            { model | player = newPlayer }
+
+                        MoveDown ->
+                            { model | player = newPlayer }
+
+                        MoveLeft ->
+                            { model | player = newPlayer }
+
+                        MoveRight ->
+                            { model | player = newPlayer }
+
+                        Pause ->
+                            { model | isPause = not model.isPause }
+                    , Cmd.none
+                    )
+                )
+                model.map
+                |> Maybe.withDefault ( model, Cmd.none )
 
         -- Tick delta ->
         --     ( { model
@@ -151,50 +161,11 @@ update msg model =
         PauseGame ->
             ( model, Cmd.none )
 
-        LevelLoaded (Ok tiledmap) ->
-            ( { model | tiledmap = Just tiledmap }, Cmd.none )
+        LevelLoaded (Ok map) ->
+            ( { model | map = Just map }, Cmd.none )
 
         LevelLoaded (Err e) ->
-            let
-                _ =
-                    Debug.log "error: " <|
-                        case e of
-                            Http.BadUrl str ->
-                                str
-
-                            Http.BadBody str ->
-                                str
-
-                            _ ->
-                                "other err"
-            in
             ( model, Cmd.none )
-
-
-doJump : KeyState -> Player -> Player
-doJump jump player =
-    case ( jump, player.canJump ) of
-        ( Down, True ) ->
-            { player | entity = Entity.setVel (jumpForce <| Vector2.getX <| Entity.velocity player.entity) player.entity }
-
-        _ ->
-            { player | entity = Entity.updateVel gravity player.entity }
-
-
-doMove : KeyState -> KeyState -> Player -> Player
-doMove left right player =
-    case ( left, right ) of
-        ( Down, Up ) ->
-            { player | entity = Entity.updateVel (Vector2.scale -1 moveSpeed) player.entity }
-
-        ( Up, Down ) ->
-            { player | entity = Entity.updateVel moveSpeed player.entity }
-
-        ( Down, Down ) ->
-            player
-
-        ( Up, Up ) ->
-            player
 
 
 
@@ -218,21 +189,14 @@ redAttr =
 
 viewPlayer : Player -> Svg.Svg msg
 viewPlayer player =
-    Svg.rect
-        [ SvgAttrs.width <| String.fromFloat <| Entity.width player.entity
-        , SvgAttrs.height <| String.fromFloat <| Entity.height player.entity
-        , SvgAttrs.x <| String.fromFloat <| Vector2.getX <| Entity.position player.entity
-        , SvgAttrs.y <| String.fromFloat <| Vector2.getY <| Entity.position player.entity
-        , grayAttr
+    Svg.image
+        [ SvgAttrs.height <| String.fromInt 16
+        , SvgAttrs.width <| String.fromInt 16
+        , SvgAttrs.x <| String.fromFloat <| Vector2.getX player.pos
+        , SvgAttrs.y <| String.fromFloat <| Vector2.getY player.pos
+        , SvgAttrs.xlinkHref <| String.concat [ Constants.assetDir, "player.png" ]
         ]
         []
-
-
-drawGame : Model -> Html Msg
-drawGame model =
-    model.tiledmap
-        |> Maybe.map Tiledmap.view
-        |> Maybe.withDefault (Html.text "NO MAP!")
 
 
 view : Model -> Html Msg
@@ -241,7 +205,21 @@ view model =
         [ Html.div
             [ Attributes.class "flex flex-col justify-center h-screen w-full"
             ]
-            [ drawGame model
+            [ model.map
+                |> Maybe.map
+                    (\map ->
+                        Svg.svg
+                            [ List.map String.fromInt [ 0, 0, Tiledmap.mapWidth map, Tiledmap.mapHeight map ]
+                                |> String.join " "
+                                |> SvgAttrs.viewBox
+                            , SvgAttrs.width "100%"
+                            , SvgAttrs.height "100%"
+                            ]
+                            [ Tiledmap.view map
+                            , viewPlayer model.player
+                            ]
+                    )
+                |> Maybe.withDefault (Html.text "NO MAP")
             ]
         ]
 
@@ -286,9 +264,14 @@ subscriptions model =
 -- Decoder
 
 
-jumpDecoder : KeyState -> Decoder Msg
-jumpDecoder keyState =
-    Decode.succeed <| Input keyState Jump
+upDecoder : KeyState -> Decoder Msg
+upDecoder keyState =
+    Decode.succeed <| Input keyState MoveUp
+
+
+downDecoder : KeyState -> Decoder Msg
+downDecoder keyState =
+    Decode.succeed <| Input keyState MoveDown
 
 
 leftDecoder : KeyState -> Decoder Msg
@@ -304,11 +287,11 @@ rightDecoder keyState =
 decodeInput : KeyState -> String -> Decoder Msg
 decodeInput keyState str =
     case str of
-        " " ->
-            jumpDecoder keyState
-
         "ArrowUp" ->
-            jumpDecoder keyState
+            upDecoder keyState
+
+        "ArrowDown" ->
+            downDecoder keyState
 
         "ArrowLeft" ->
             leftDecoder keyState
@@ -317,7 +300,10 @@ decodeInput keyState str =
             rightDecoder keyState
 
         "w" ->
-            jumpDecoder keyState
+            upDecoder keyState
+
+        "s" ->
+            downDecoder keyState
 
         "a" ->
             leftDecoder keyState

@@ -1,5 +1,6 @@
-module Tiledmap exposing (Tiledmap, decoder, mapHeight, mapWidth, view)
+module Tiledmap exposing (Tiledmap, decoder, mapHeight, mapWidth, tileHeight, tileWidth, view)
 
+import Constants
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline as Decode
@@ -33,6 +34,16 @@ type alias Tile =
     }
 
 
+tileHeight : Tiledmap -> Int
+tileHeight (Tiledmap map) =
+    map.tileHeight
+
+
+tileWidth : Tiledmap -> Int
+tileWidth (Tiledmap map) =
+    map.tileWidth
+
+
 mapHeight : Tiledmap -> Int
 mapHeight (Tiledmap map) =
     map.height * map.tileHeight
@@ -56,15 +67,15 @@ view ((Tiledmap map) as tiledmap) =
         , Attributes.width "100%"
         ]
         [ Svg.svg [] <|
-            List.indexedMap
-                (\layerIndex layer ->
+            List.map
+                (\layer ->
                     Svg.g []
                         (List.indexedMap
                             (\tileIndex tileId ->
                                 viewTile tileIndex
                                     { tileName = Dict.get tileId map.tiles
-                                    , tileHeight = map.tileHeight
-                                    , tileWidth = map.tileWidth
+                                    , height = map.tileHeight
+                                    , width = map.tileWidth
                                     , mapCols = map.width
                                     }
                             )
@@ -75,20 +86,37 @@ view ((Tiledmap map) as tiledmap) =
         ]
 
 
-viewTile : Int -> { tileName : Maybe String, tileHeight : Int, tileWidth : Int, mapCols : Int } -> Svg msg
-viewTile index { tileName, tileHeight, tileWidth, mapCols } =
+
+-- Can I use something like this to create more efficient html structure??
+
+
+indexedMap2 : (Int -> a -> b -> result) -> List a -> List b -> List result
+indexedMap2 f listA listB =
+    let
+        longestLength =
+            if List.length listB > List.length listA then
+                List.length listB - 1
+
+            else
+                List.length listA - 1
+    in
+    List.map3 f (List.range 0 longestLength) listA listB
+
+
+viewTile : Int -> { tileName : Maybe String, height : Int, width : Int, mapCols : Int } -> Svg msg
+viewTile index { tileName, height, width, mapCols } =
     Svg.svg
-        [ Attributes.width <| String.fromInt tileWidth
-        , Attributes.height <| String.fromInt tileHeight
-        , Attributes.x <| String.fromInt <| (*) tileWidth <| modBy mapCols index
-        , Attributes.y <| String.fromInt <| (*) tileHeight <| index // mapCols
+        [ Attributes.width <| String.fromInt height
+        , Attributes.height <| String.fromInt width
+        , Attributes.x <| String.fromInt <| (*) width <| modBy mapCols index
+        , Attributes.y <| String.fromInt <| (*) height <| index // mapCols
         ]
         [ Svg.image
-            [ Attributes.width <| String.fromInt tileWidth
-            , Attributes.height <| String.fromInt tileHeight
+            [ Attributes.width <| String.fromInt width
+            , Attributes.height <| String.fromInt height
             , case tileName of
                 Just imageName ->
-                    Attributes.xlinkHref <| String.concat [ "./public/assets/", imageName ]
+                    Attributes.xlinkHref <| String.concat [ Constants.assetDir, imageName ]
 
                 Nothing ->
                     Attributes.title "empty tile"
