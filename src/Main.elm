@@ -7,6 +7,7 @@ import Html exposing (Html)
 import Html.Attributes as Attributes
 import Http
 import Json.Decode as Decode exposing (Decoder, Value)
+import Json.Decode.Pipeline as Decode
 import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
@@ -22,14 +23,9 @@ type alias Model =
 
 
 type Msg
-    = Input KeyState Input
+    = Input Input
     | Tick Float
     | LevelLoaded (Result Http.Error Tiledmap)
-
-
-type KeyState
-    = Up
-    | Down
 
 
 type Input
@@ -37,7 +33,6 @@ type Input
     | MoveDown
     | MoveLeft
     | MoveRight
-    | Pause
 
 
 init : Value -> ( Model, Cmd Msg )
@@ -89,7 +84,7 @@ clampX min max vect2 =
 update : Msg -> Model -> ( Model, Cmd Msg )
 update msg model =
     case msg of
-        Input keyState input ->
+        Input input ->
             Maybe.map
                 (\map ->
                     let
@@ -105,21 +100,18 @@ update msg model =
                         newPlayer =
                             { player
                                 | pos =
-                                    case ( input, keyState ) of
-                                        ( MoveUp, Down ) ->
+                                    case input of
+                                        MoveUp ->
                                             Vector2.add player.pos (Vector2.create { x = 0, y = height * -1 })
 
-                                        ( MoveDown, Down ) ->
+                                        MoveDown ->
                                             Vector2.add player.pos (Vector2.create { x = 0, y = height })
 
-                                        ( MoveLeft, Down ) ->
+                                        MoveLeft ->
                                             Vector2.add player.pos (Vector2.create { x = width * -1, y = 0 })
 
-                                        ( MoveRight, Down ) ->
+                                        MoveRight ->
                                             Vector2.add player.pos (Vector2.create { x = width, y = 0 })
-
-                                        _ ->
-                                            player.pos
                             }
                     in
                     ( case input of
@@ -134,9 +126,6 @@ update msg model =
 
                         MoveRight ->
                             { model | player = newPlayer }
-
-                        Pause ->
-                            { model | isPause = not model.isPause }
                     , Cmd.none
                     )
                 )
@@ -209,74 +198,40 @@ main =
 subscriptions : Model -> Sub Msg
 subscriptions model =
     Sub.batch
-        [ Browser.Events.onKeyDown <|
-            Decode.andThen (decodeInput Down) (Decode.field "key" Decode.string)
-        , Browser.Events.onKeyUp <|
-            Decode.andThen (decodeInput Up) (Decode.field "key" Decode.string)
+        [ Browser.Events.onKeyDown
+            (Decode.field "key" Decode.string
+                |> Decode.andThen
+                    (\str ->
+                        case str of
+                            "ArrowUp" ->
+                                Decode.succeed (Input MoveUp)
+
+                            "ArrowDown" ->
+                                Decode.succeed (Input MoveDown)
+
+                            "ArrowLeft" ->
+                                Decode.succeed (Input MoveLeft)
+
+                            "ArrowRight" ->
+                                Decode.succeed (Input MoveRight)
+
+                            "w" ->
+                                Decode.succeed (Input MoveUp)
+
+                            "s" ->
+                                Decode.succeed (Input MoveDown)
+
+                            "a" ->
+                                Decode.succeed (Input MoveLeft)
+
+                            "d" ->
+                                Decode.succeed (Input MoveRight)
+
+                            _ ->
+                                Decode.fail ""
+                    )
+            )
 
         -- , Browser.Events.onAnimationFrameDelta (\f -> Tick <| f / 1000 )
         , Sub.none
         ]
-
-
-
--- Decoder
-
-
-upDecoder : KeyState -> Decoder Msg
-upDecoder keyState =
-    Decode.succeed <| Input keyState MoveUp
-
-
-downDecoder : KeyState -> Decoder Msg
-downDecoder keyState =
-    Decode.succeed <| Input keyState MoveDown
-
-
-leftDecoder : KeyState -> Decoder Msg
-leftDecoder keyState =
-    Decode.succeed <| Input keyState MoveLeft
-
-
-rightDecoder : KeyState -> Decoder Msg
-rightDecoder keyState =
-    Decode.succeed <| Input keyState MoveRight
-
-
-decodeInput : KeyState -> String -> Decoder Msg
-decodeInput keyState str =
-    case str of
-        "ArrowUp" ->
-            upDecoder keyState
-
-        "ArrowDown" ->
-            downDecoder keyState
-
-        "ArrowLeft" ->
-            leftDecoder keyState
-
-        "ArrowRight" ->
-            rightDecoder keyState
-
-        "w" ->
-            upDecoder keyState
-
-        "s" ->
-            downDecoder keyState
-
-        "a" ->
-            leftDecoder keyState
-
-        "d" ->
-            rightDecoder keyState
-
-        "Escape" ->
-            case keyState of
-                Up ->
-                    Decode.succeed <| Input Up Pause
-
-                _ ->
-                    Decode.fail ""
-
-        _ ->
-            Decode.fail ""

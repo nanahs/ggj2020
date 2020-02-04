@@ -81,17 +81,6 @@ view ((Tiledmap map) as tiledmap) =
 
 
 
--- Can I use something like this to create more efficient html structure??
--- indexedMap2 : (Int -> a -> b -> result) -> List a -> List b -> List result
--- indexedMap2 f listA listB =
---     let
---         longestLength =
---             if List.length listB > List.length listA then
---                 List.length listB - 1
---             else
---                 List.length listA - 1
---     in
---     List.map3 f (List.range 0 longestLength) listA listB
 --DECODERS
 
 
@@ -130,22 +119,3 @@ tileToDictDecoder =
 tilesetDecoder : Decoder (List Tile)
 tilesetDecoder =
     Decode.field "tiles" (Decode.list Tile.decoder)
-
-
-
---EXPERIMENTAL
--- type alias TileLayer =
---     { tiles : List Tile
---     , layerName : String
---     }
--- tileLayerDecoder : Decoder (List TileLayer)
--- tileLayerDecoder =
---     Decode.at [ "tilesets", "tiles" ] (Decode.list tileDecoder)
---         |> Decode.andThen tileLayerHelper
--- tileLayerHelper : List Tile -> Decoder (List TileLayer)
--- tileLayerHelper tiles =
---     Decode.field "layers" (Decode.list (newLayerDecoder tiles))
--- newLayerDecoder : List Tile -> Decoder TileLayer
--- newLayerDecoder tiles =
---     Decode.succeed (TileLayer tiles)
---         |> Decode.required "name" Decode.string
