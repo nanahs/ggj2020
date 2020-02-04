@@ -1,6 +1,5 @@
 module Player exposing (Player, initPlayer)
 
-import Entity exposing (Entity)
 import Vector2 exposing (Vector2)
 
 

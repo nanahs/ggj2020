@@ -1,29 +1,29 @@
-module Vector2 exposing (Vector2, add, centerPoint, create, getX, getY, normalize, scale, setY, sub, zero)
+module Vector2 exposing (Vector2, add, centerPoint, create, getX, getY, scale, setY, sub, zero)
 
 
 type Vector2
     = Vector2
-        { x : Float
-        , y : Float
+        { x : Int
+        , y : Int
         }
 
 
-create : { x : Float, y : Float } -> Vector2
+create : { x : Int, y : Int } -> Vector2
 create =
     Vector2
 
 
-getX : Vector2 -> Float
-getX (Vector2 { x, y }) =
+getX : Vector2 -> Int
+getX (Vector2 { x }) =
     x
 
 
-getY : Vector2 -> Float
-getY (Vector2 { x, y }) =
+getY : Vector2 -> Int
+getY (Vector2 { y }) =
     y
 
 
-setY : Float -> Vector2 -> Vector2
+setY : Int -> Vector2 -> Vector2
 setY y (Vector2 vec) =
     Vector2 { vec | y = y }
 
@@ -43,20 +43,11 @@ sub (Vector2 f) (Vector2 s) =
     Vector2 { x = f.x - s.x, y = f.y - s.y }
 
 
-normalize : Vector2 -> Vector2
-normalize (Vector2 { x, y }) =
-    let
-        len =
-            sqrt <| (x * x) + (y * y)
-    in
-    Vector2 { x = x / len, y = y / len }
-
-
-scale : Float -> Vector2 -> Vector2
+scale : Int -> Vector2 -> Vector2
 scale scaler (Vector2 { x, y }) =
     Vector2 { x = x * scaler, y = y * scaler }
 
 
-centerPoint : { height : Float, width : Float } -> Vector2
+centerPoint : { height : Int, width : Int } -> Vector2
 centerPoint { height, width } =
-    Vector2 { x = width / 2, y = height / 2 }
+    Vector2 { x = width // 2, y = height // 2 }

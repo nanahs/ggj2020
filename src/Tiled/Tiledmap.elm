@@ -1,11 +1,11 @@
-module Tiledmap exposing (Tiledmap, decoder, mapHeight, mapWidth, tileHeight, tileWidth, view)
+module Tiled.Tiledmap exposing (Tiledmap, decoder, mapHeight, mapWidth, tileHeight, tileWidth, view)
 
-import Constants
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline as Decode
 import Svg exposing (Svg)
 import Svg.Attributes as Attributes
+import Tiled.Tile as Tile exposing (Tile)
 
 
 type Tiledmap
@@ -25,12 +25,6 @@ type alias Internal =
 type alias Layer =
     { name : String
     , tileIds : List Int
-    }
-
-
-type alias Tile =
-    { id : Int
-    , imgName : String
     }
 
 
@@ -72,7 +66,7 @@ view ((Tiledmap map) as tiledmap) =
                     Svg.g []
                         (List.indexedMap
                             (\tileIndex tileId ->
-                                viewTile tileIndex
+                                Tile.view tileIndex
                                     { tileName = Dict.get tileId map.tiles
                                     , height = map.tileHeight
                                     , width = map.tileWidth
@@ -88,44 +82,16 @@ view ((Tiledmap map) as tiledmap) =
 
 
 -- Can I use something like this to create more efficient html structure??
-
-
-indexedMap2 : (Int -> a -> b -> result) -> List a -> List b -> List result
-indexedMap2 f listA listB =
-    let
-        longestLength =
-            if List.length listB > List.length listA then
-                List.length listB - 1
-
-            else
-                List.length listA - 1
-    in
-    List.map3 f (List.range 0 longestLength) listA listB
-
-
-viewTile : Int -> { tileName : Maybe String, height : Int, width : Int, mapCols : Int } -> Svg msg
-viewTile index { tileName, height, width, mapCols } =
-    Svg.svg
-        [ Attributes.width <| String.fromInt height
-        , Attributes.height <| String.fromInt width
-        , Attributes.x <| String.fromInt <| (*) width <| modBy mapCols index
-        , Attributes.y <| String.fromInt <| (*) height <| index // mapCols
-        ]
-        [ Svg.image
-            [ Attributes.width <| String.fromInt width
-            , Attributes.height <| String.fromInt height
-            , case tileName of
-                Just imageName ->
-                    Attributes.xlinkHref <| String.concat [ Constants.assetDir, imageName ]
-
-                Nothing ->
-                    Attributes.title "empty tile"
-            ]
-            []
-        ]
-
-
-
+-- indexedMap2 : (Int -> a -> b -> result) -> List a -> List b -> List result
+-- indexedMap2 f listA listB =
+--     let
+--         longestLength =
+--             if List.length listB > List.length listA then
+--                 List.length listB - 1
+--             else
+--                 List.length listA - 1
+--     in
+--     List.map3 f (List.range 0 longestLength) listA listB
 --DECODERS
 
 
@@ -137,7 +103,7 @@ decoder =
         |> Decode.required "tileheight" Decode.int
         |> Decode.required "tilewidth" Decode.int
         |> Decode.required "layers" (Decode.list layerDecoder)
-        |> Decode.custom tDec
+        |> Decode.custom tileToDictDecoder
         |> Decode.map Tiledmap
 
 
@@ -148,16 +114,9 @@ layerDecoder =
         |> Decode.required "data" (Decode.list Decode.int)
 
 
-tileDecoder : Decoder Tile
-tileDecoder =
-    Decode.succeed Tile
-        |> Decode.required "id" Decode.int
-        |> Decode.required "image" Decode.string
-
-
-tDec : Decoder (Dict Int String)
-tDec =
-    Decode.field "tilesets" (Decode.list ts)
+tileToDictDecoder : Decoder (Dict Int String)
+tileToDictDecoder =
+    Decode.field "tilesets" (Decode.list tilesetDecoder)
         |> Decode.map
             (\listOfList ->
                 listOfList
@@ -168,9 +127,9 @@ tDec =
             )
 
 
-ts : Decoder (List Tile)
-ts =
-    Decode.field "tiles" (Decode.list tileDecoder)
+tilesetDecoder : Decoder (List Tile)
+tilesetDecoder =
+    Decode.field "tiles" (Decode.list Tile.decoder)
 
 
 

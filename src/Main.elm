@@ -3,7 +3,6 @@ module Main exposing (main)
 import Browser
 import Browser.Events
 import Constants
-import Entity exposing (Entity)
 import Html exposing (Html)
 import Html.Attributes as Attributes
 import Http
@@ -11,8 +10,7 @@ import Json.Decode as Decode exposing (Decoder, Value)
 import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
-import Tile exposing (Tile)
-import Tiledmap exposing (Tiledmap)
+import Tiled.Tiledmap as Map exposing (Tiledmap)
 import Vector2 as Vector2 exposing (Vector2)
 
 
@@ -26,7 +24,6 @@ type alias Model =
 type Msg
     = Input KeyState Input
     | Tick Float
-    | PauseGame
     | LevelLoaded (Result Http.Error Tiledmap)
 
 
@@ -48,7 +45,7 @@ init _ =
     ( initialModel
     , Http.get
         { url = String.concat [ Constants.assetDir, "map.json" ]
-        , expect = Http.expectJson LevelLoaded Tiledmap.decoder
+        , expect = Http.expectJson LevelLoaded Map.decoder
         }
     )
 
@@ -61,7 +58,7 @@ initialModel =
     }
 
 
-clampY : Float -> Float -> Vector2 -> Vector2
+clampY : Int -> Int -> Vector2 -> Vector2
 clampY min max vect2 =
     if Vector2.getY vect2 < min then
         Vector2.create { x = Vector2.getX vect2, y = min }
@@ -73,7 +70,7 @@ clampY min max vect2 =
         vect2
 
 
-clampX : Float -> Float -> Vector2 -> Vector2
+clampX : Int -> Int -> Vector2 -> Vector2
 clampX min max vect2 =
     if Vector2.getX vect2 < min then
         Vector2.create { x = min, y = Vector2.getY vect2 }
@@ -100,26 +97,26 @@ update msg model =
                             model.player
 
                         height =
-                            Tiledmap.tileHeight map
+                            Map.tileHeight map
 
                         width =
-                            Tiledmap.tileWidth map
+                            Map.tileWidth map
 
                         newPlayer =
                             { player
                                 | pos =
                                     case ( input, keyState ) of
                                         ( MoveUp, Down ) ->
-                                            Vector2.add player.pos (Vector2.create { x = 0, y = toFloat <| height * -1 })
+                                            Vector2.add player.pos (Vector2.create { x = 0, y = height * -1 })
 
                                         ( MoveDown, Down ) ->
-                                            Vector2.add player.pos (Vector2.create { x = 0, y = toFloat height })
+                                            Vector2.add player.pos (Vector2.create { x = 0, y = height })
 
                                         ( MoveLeft, Down ) ->
-                                            Vector2.add player.pos (Vector2.create { x = toFloat <| width * -1, y = 0 })
+                                            Vector2.add player.pos (Vector2.create { x = width * -1, y = 0 })
 
                                         ( MoveRight, Down ) ->
-                                            Vector2.add player.pos (Vector2.create { x = toFloat width, y = 0 })
+                                            Vector2.add player.pos (Vector2.create { x = width, y = 0 })
 
                                         _ ->
                                             player.pos
@@ -146,19 +143,7 @@ update msg model =
                 model.map
                 |> Maybe.withDefault ( model, Cmd.none )
 
-        -- Tick delta ->
-        --     ( { model
-        --         | player =
-        --             doJump model.jump model.player
-        --                 |> doMove model.left model.right
-        --                 |> Entity.updatePos delta Vector2.zero gameBoard
-        --       }
-        --     , Cmd.none
-        --     )
         Tick delta ->
-            ( model, Cmd.none )
-
-        PauseGame ->
             ( model, Cmd.none )
 
         LevelLoaded (Ok map) ->
@@ -172,54 +157,34 @@ update msg model =
 -- VIEW
 
 
-blackAttr : Svg.Attribute msg
-blackAttr =
-    SvgAttrs.class "text-gray-700 fill-current"
-
-
-grayAttr : Svg.Attribute msg
-grayAttr =
-    SvgAttrs.class "text-gray-300 fill-current"
-
-
-redAttr : Svg.Attribute msg
-redAttr =
-    SvgAttrs.class "text-red-500 fill-current"
-
-
 viewPlayer : Player -> Svg.Svg msg
 viewPlayer player =
     Svg.image
         [ SvgAttrs.height <| String.fromInt 16
         , SvgAttrs.width <| String.fromInt 16
-        , SvgAttrs.x <| String.fromFloat <| Vector2.getX player.pos
-        , SvgAttrs.y <| String.fromFloat <| Vector2.getY player.pos
+        , SvgAttrs.x <| String.fromInt <| Vector2.getX player.pos
+        , SvgAttrs.y <| String.fromInt <| Vector2.getY player.pos
         , SvgAttrs.xlinkHref <| String.concat [ Constants.assetDir, "player.png" ]
         ]
         []
 
 
-view : Model -> Html Msg
-view model =
+view : Model -> Tiledmap -> Html Msg
+view model map =
     Html.div [ Attributes.class "flex justify-center h-screen bg-gray-700" ]
         [ Html.div
             [ Attributes.class "flex flex-col justify-center h-screen w-full"
             ]
-            [ model.map
-                |> Maybe.map
-                    (\map ->
-                        Svg.svg
-                            [ List.map String.fromInt [ 0, 0, Tiledmap.mapWidth map, Tiledmap.mapHeight map ]
-                                |> String.join " "
-                                |> SvgAttrs.viewBox
-                            , SvgAttrs.width "100%"
-                            , SvgAttrs.height "100%"
-                            ]
-                            [ Tiledmap.view map
-                            , viewPlayer model.player
-                            ]
-                    )
-                |> Maybe.withDefault (Html.text "NO MAP")
+            [ Svg.svg
+                [ List.map String.fromInt [ 0, 0, Map.mapWidth map, Map.mapHeight map ]
+                    |> String.join " "
+                    |> SvgAttrs.viewBox
+                , SvgAttrs.width "100%"
+                , SvgAttrs.height "100%"
+                ]
+                [ Map.view map
+                , viewPlayer model.player
+                ]
             ]
         ]
 
@@ -231,7 +196,10 @@ main =
         , view =
             \model ->
                 { title = "GGJ2020"
-                , body = [ view model ]
+                , body =
+                    [ Maybe.map (view model) model.map
+                        |> Maybe.withDefault (Html.text "No map loaded")
+                    ]
                 }
         , update = update
         , subscriptions = subscriptions
@@ -246,16 +214,7 @@ subscriptions model =
         , Browser.Events.onKeyUp <|
             Decode.andThen (decodeInput Up) (Decode.field "key" Decode.string)
 
-        -- , if model.isPause then
-        --     Sub.none
-        --   else
-        --     Browser.Events.onAnimationFrameDelta
-        --         (\f ->
-        --             if model.isPause then
-        --                 PauseGame
-        --             else
-        --                 Tick <| f / 1000
-        --         )
+        -- , Browser.Events.onAnimationFrameDelta (\f -> Tick <| f / 1000 )
         , Sub.none
         ]
 
