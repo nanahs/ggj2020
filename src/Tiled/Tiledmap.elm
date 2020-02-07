@@ -13,11 +13,9 @@ type Tiledmap
 
 
 type alias Internal =
-    { height : Int
-    , width : Int
-    , tileHeight : Int
-    , tileWidth : Int
-    , layers : List Layer
+    { info : MapInfo
+    , background : Layer
+    , collisions : Layer
     , tiles : Dict Int String
     }
 
@@ -28,24 +26,32 @@ type alias Layer =
     }
 
 
+type alias MapInfo =
+    { height : Int
+    , width : Int
+    , tileHeight : Int
+    , tileWidth : Int
+    }
+
+
 tileHeight : Tiledmap -> Int
 tileHeight (Tiledmap map) =
-    map.tileHeight
+    map.info.tileHeight
 
 
 tileWidth : Tiledmap -> Int
 tileWidth (Tiledmap map) =
-    map.tileWidth
+    map.info.tileWidth
 
 
 mapHeight : Tiledmap -> Int
 mapHeight (Tiledmap map) =
-    map.height * map.tileHeight
+    map.info.height * map.info.tileHeight
 
 
 mapWidth : Tiledmap -> Int
 mapWidth (Tiledmap map) =
-    map.width * map.tileWidth
+    map.info.width * map.info.tileWidth
 
 
 
@@ -60,24 +66,24 @@ view ((Tiledmap map) as tiledmap) =
             |> Attributes.viewBox
         , Attributes.width "100%"
         ]
-        [ Svg.svg [] <|
-            List.map
-                (\layer ->
-                    Svg.g []
-                        (List.indexedMap
-                            (\tileIndex tileId ->
-                                Tile.view tileIndex
-                                    { tileName = Dict.get tileId map.tiles
-                                    , height = map.tileHeight
-                                    , width = map.tileWidth
-                                    , mapCols = map.width
-                                    }
-                            )
-                            layer.tileIds
-                        )
-                )
-                map.layers
+        [ drawLayer map.background tiledmap
+        , drawLayer map.collisions tiledmap
         ]
+
+
+drawLayer : Layer -> Tiledmap -> Svg msg
+drawLayer layer (Tiledmap map) =
+    Svg.g [ Attributes.title layer.name ] <|
+        List.indexedMap
+            (\index id ->
+                Tile.view index
+                    { tileName = Dict.get id map.tiles
+                    , height = map.info.tileHeight
+                    , width = map.info.tileWidth
+                    , mapCols = map.info.width
+                    }
+            )
+            layer.tileIds
 
 
 
@@ -87,13 +93,38 @@ view ((Tiledmap map) as tiledmap) =
 decoder : Decoder Tiledmap
 decoder =
     Decode.succeed Internal
+        |> Decode.custom decodeMapInfo
+        |> Decode.custom (getLayerDecoder "Background")
+        |> Decode.custom (getLayerDecoder "Collision")
+        |> Decode.custom tileToDictDecoder
+        |> Decode.map Tiledmap
+
+
+decodeMapInfo : Decoder MapInfo
+decodeMapInfo =
+    Decode.succeed MapInfo
         |> Decode.required "height" Decode.int
         |> Decode.required "width" Decode.int
         |> Decode.required "tileheight" Decode.int
         |> Decode.required "tilewidth" Decode.int
-        |> Decode.required "layers" (Decode.list layerDecoder)
-        |> Decode.custom tileToDictDecoder
-        |> Decode.map Tiledmap
+
+
+getLayerDecoder : String -> Decoder Layer
+getLayerDecoder layerName =
+    Decode.field "layers" (Decode.list layerDecoder)
+        |> Decode.andThen
+            (\layerList ->
+                List.foldl
+                    (\val acc ->
+                        if val.name == layerName then
+                            Decode.succeed val
+
+                        else
+                            acc
+                    )
+                    (Decode.fail "")
+                    layerList
+            )
 
 
 layerDecoder : Decoder Layer
