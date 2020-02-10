@@ -92,42 +92,44 @@ update msg model =
 
 updateInput : Model -> Input -> Model
 updateInput model input =
-    let
-        player =
-            model.player
-
-        ( x, y ) =
-            player.pos
-
-        newPlayer =
-            { player
-                | pos =
-                    case input of
+    if canMove model.collision model.player.pos input then
+        { model
+            | player =
+                Player.setPos
+                    (case input of
                         MoveUp ->
-                            ( x, y - 1 )
+                            Grid.up model.player.pos
 
                         MoveDown ->
-                            ( x, y + 1 )
+                            Grid.down model.player.pos
 
                         MoveLeft ->
-                            ( x - 1, y )
+                            Grid.left model.player.pos
 
                         MoveRight ->
-                            ( x + 1, y )
-            }
-    in
+                            Grid.right model.player.pos
+                    )
+                    model.player
+        }
+
+    else
+        model
+
+
+canMove : Grid Int -> ( Int, Int ) -> Input -> Bool
+canMove collisions pos input =
     case input of
         MoveUp ->
-            { model | player = newPlayer }
+            Grid.member (Grid.up pos) collisions
 
         MoveDown ->
-            { model | player = newPlayer }
+            Grid.member (Grid.down pos) collisions
 
         MoveLeft ->
-            { model | player = newPlayer }
+            Grid.member (Grid.left pos) collisions
 
         MoveRight ->
-            { model | player = newPlayer }
+            Grid.member (Grid.right pos) collisions
 
 
 

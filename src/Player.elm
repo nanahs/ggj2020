@@ -1,4 +1,4 @@
-module Player exposing (Player, initPlayer)
+module Player exposing (Player, initPlayer, setPos)
 
 
 type alias Player =
@@ -12,3 +12,8 @@ initPlayer pos =
     { pos = pos
     , src = "player.png"
     }
+
+
+setPos : ( Int, Int ) -> Player -> Player
+setPos pos player =
+    { player | pos = pos }

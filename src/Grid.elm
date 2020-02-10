@@ -1,4 +1,4 @@
-module Grid exposing (Grid, get, height, init, insert, remove, toList, update, width)
+module Grid exposing (Grid, down, get, height, init, insert, left, member, remove, right, toList, up, update, width)
 
 import Dict exposing (Dict)
 
@@ -12,6 +12,35 @@ type alias Internal a =
     , height : Int
     , width : Int
     }
+
+
+up : ( Int, Int ) -> ( Int, Int )
+up ( x, y ) =
+    ( x, y - 1 )
+
+
+down : ( Int, Int ) -> ( Int, Int )
+down ( x, y ) =
+    ( x, y + 1 )
+
+
+left : ( Int, Int ) -> ( Int, Int )
+left ( x, y ) =
+    ( x - 1, y )
+
+
+right : ( Int, Int ) -> ( Int, Int )
+right ( x, y ) =
+    ( x + 1, y )
+
+
+
+--
+
+
+member : ( Int, Int ) -> Grid a -> Bool
+member coord (Grid { grid }) =
+    Dict.member (toString coord) grid
 
 
 get : ( Int, Int ) -> Grid a -> Maybe a
