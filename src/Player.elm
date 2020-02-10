@@ -1,14 +1,14 @@
 module Player exposing (Player, initPlayer)
 
-import Vector2 exposing (Vector2)
-
 
 type alias Player =
-    { pos : Vector2
+    { pos : ( Int, Int )
+    , src : String
     }
 
 
-initPlayer : Vector2 -> Player
+initPlayer : ( Int, Int ) -> Player
 initPlayer pos =
     { pos = pos
+    , src = "player.png"
     }

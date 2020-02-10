@@ -14,7 +14,6 @@ import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
 import Tiled.Tiledmap as Map exposing (Tiledmap)
-import Vector2 as Vector2 exposing (Vector2)
 
 
 type alias Model =
@@ -40,7 +39,7 @@ init map =
             Map.mapHeight map
     in
     { isPause = False
-    , player = Player.initPlayer <| Vector2.create { x = 32, y = 32 }
+    , player = Player.initPlayer <| ( 2, 2 )
     , background = initGrid height width (Map.background map)
     , collision = initGrid height width (Map.collisions map)
     , tiles = Map.tileset map
@@ -77,30 +76,6 @@ type Input
     | MoveRight
 
 
-clampY : Int -> Int -> Vector2 -> Vector2
-clampY min max vect2 =
-    if Vector2.getY vect2 < min then
-        Vector2.create { x = Vector2.getX vect2, y = min }
-
-    else if Vector2.getY vect2 > max then
-        Vector2.create { x = Vector2.getX vect2, y = max }
-
-    else
-        vect2
-
-
-clampX : Int -> Int -> Vector2 -> Vector2
-clampX min max vect2 =
-    if Vector2.getX vect2 < min then
-        Vector2.create { x = min, y = Vector2.getY vect2 }
-
-    else if Vector2.getX vect2 > max then
-        Vector2.create { x = max, y = Vector2.getY vect2 }
-
-    else
-        vect2
-
-
 
 -- UPDATE
 
@@ -121,21 +96,24 @@ updateInput model input =
         player =
             model.player
 
+        ( x, y ) =
+            player.pos
+
         newPlayer =
             { player
                 | pos =
                     case input of
                         MoveUp ->
-                            Vector2.add player.pos (Vector2.create { x = 0, y = -1 })
+                            ( x, y - 1 )
 
                         MoveDown ->
-                            Vector2.add player.pos (Vector2.create { x = 0, y = 1 })
+                            ( x, y + 1 )
 
                         MoveLeft ->
-                            Vector2.add player.pos (Vector2.create { x = -1, y = 0 })
+                            ( x - 1, y )
 
                         MoveRight ->
-                            Vector2.add player.pos (Vector2.create { x = 1, y = 0 })
+                            ( x + 1, y )
             }
     in
     case input of
@@ -156,14 +134,14 @@ updateInput model input =
 -- VIEW
 
 
-viewPlayer : Player -> Svg.Svg msg
-viewPlayer player =
+viewPlayer : Player -> Int -> Int -> Svg.Svg msg
+viewPlayer player tileWidth tileHeight =
     Svg.image
-        [ SvgAttrs.height <| String.fromInt 16
-        , SvgAttrs.width <| String.fromInt 16
-        , SvgAttrs.x <| String.fromInt <| (1 * Vector2.getX player.pos)
-        , SvgAttrs.y <| String.fromInt <| (1 * Vector2.getY player.pos)
-        , SvgAttrs.xlinkHref <| String.concat [ Constants.assetDir, "player.png" ]
+        [ SvgAttrs.x <| String.fromInt <| (tileWidth * Tuple.first player.pos)
+        , SvgAttrs.y <| String.fromInt <| (tileHeight * Tuple.second player.pos)
+        , SvgAttrs.height <| String.fromInt tileHeight
+        , SvgAttrs.width <| String.fromInt tileWidth
+        , SvgAttrs.xlinkHref <| String.concat [ Constants.assetDir, player.src ]
         ]
         []
 
@@ -172,18 +150,18 @@ view : Model -> Html Msg
 view model =
     Html.div [ Attributes.class "flex justify-center h-screen bg-gray-700" ]
         [ Html.div
-            [ Attributes.class "flex flex-col justify-center h-screen"
+            [ Attributes.class "flex flex-col justify-center h-screen w-full"
             ]
             [ Svg.svg
                 [ List.map String.fromInt [ 0, 0, model.height * model.tileHeight, model.width * model.tileWidth ]
                     |> String.join " "
                     |> SvgAttrs.viewBox
-                , SvgAttrs.width "320px"
-                , SvgAttrs.height "320px"
+                , SvgAttrs.width "100%"
+                , SvgAttrs.height "100%"
                 ]
               <|
                 List.map (viewLayer model.tiles model.tileHeight model.tileWidth) [ model.background, model.collision ]
-                    ++ [ viewPlayer model.player ]
+                    ++ [ viewPlayer model.player model.tileWidth model.tileHeight ]
             ]
         ]
 
