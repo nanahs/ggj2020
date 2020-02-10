@@ -1,8 +1,9 @@
-module Tiled.Tiledmap exposing (Tiledmap, decoder, mapHeight, mapWidth, tileHeight, tileWidth, view)
+module Tiled.Tiledmap exposing (Tiledmap, background, collisions, decoder, mapHeight, mapWidth, tileHeight, tileWidth, tileset, view)
 
 import Dict exposing (Dict)
 import Json.Decode as Decode exposing (Decoder)
 import Json.Decode.Pipeline as Decode
+import Layer exposing (Layer)
 import Svg exposing (Svg)
 import Svg.Attributes as Attributes
 import Tiled.Tile as Tile exposing (Tile)
@@ -17,12 +18,6 @@ type alias Internal =
     , background : Layer
     , collisions : Layer
     , tiles : Dict Int String
-    }
-
-
-type alias Layer =
-    { name : String
-    , tileIds : List Int
     }
 
 
@@ -46,12 +41,27 @@ tileWidth (Tiledmap map) =
 
 mapHeight : Tiledmap -> Int
 mapHeight (Tiledmap map) =
-    map.info.height * map.info.tileHeight
+    map.info.height
 
 
 mapWidth : Tiledmap -> Int
 mapWidth (Tiledmap map) =
-    map.info.width * map.info.tileWidth
+    map.info.width
+
+
+tileset : Tiledmap -> Dict Int String
+tileset (Tiledmap map) =
+    map.tiles
+
+
+background : Tiledmap -> Layer
+background (Tiledmap map) =
+    map.background
+
+
+collisions : Tiledmap -> Layer
+collisions (Tiledmap map) =
+    map.collisions
 
 
 
@@ -94,8 +104,8 @@ decoder : Decoder Tiledmap
 decoder =
     Decode.succeed Internal
         |> Decode.custom decodeMapInfo
-        |> Decode.custom (getLayerDecoder "Background")
-        |> Decode.custom (getLayerDecoder "Collision")
+        |> Decode.custom (Layer.decoder "Background")
+        |> Decode.custom (Layer.decoder "Collision")
         |> Decode.custom tileToDictDecoder
         |> Decode.map Tiledmap
 
@@ -107,31 +117,6 @@ decodeMapInfo =
         |> Decode.required "width" Decode.int
         |> Decode.required "tileheight" Decode.int
         |> Decode.required "tilewidth" Decode.int
-
-
-getLayerDecoder : String -> Decoder Layer
-getLayerDecoder layerName =
-    Decode.field "layers" (Decode.list layerDecoder)
-        |> Decode.andThen
-            (\layerList ->
-                List.foldl
-                    (\val acc ->
-                        if val.name == layerName then
-                            Decode.succeed val
-
-                        else
-                            acc
-                    )
-                    (Decode.fail "")
-                    layerList
-            )
-
-
-layerDecoder : Decoder Layer
-layerDecoder =
-    Decode.succeed Layer
-        |> Decode.required "name" Decode.string
-        |> Decode.required "data" (Decode.list Decode.int)
 
 
 tileToDictDecoder : Decoder (Dict Int String)
