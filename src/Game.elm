@@ -13,6 +13,7 @@ import Layer exposing (Layer)
 import Player exposing (Player)
 import Svg as Svg
 import Svg.Attributes as SvgAttrs
+import Svg.Keyed
 import Tiled.Tiledmap as Map exposing (Tiledmap)
 
 
@@ -39,7 +40,7 @@ init map =
             Map.mapHeight map
     in
     { isPause = False
-    , player = Player.initPlayer <| ( 8, 7 )
+    , player = Player.initPlayer <| ( 5, 6 )
     , background = initGrid height width (Map.background map)
     , collision = initGrid height width (Map.collisions map)
     , tiles = Map.tileset map
@@ -89,23 +90,26 @@ update msg model =
 
 updateInput : Model -> Input -> Model
 updateInput model input =
+    let
+        newPos =
+            case input of
+                MoveUp ->
+                    Grid.up model.player.pos
+
+                MoveDown ->
+                    Grid.down model.player.pos
+
+                MoveLeft ->
+                    Grid.left model.player.pos
+
+                MoveRight ->
+                    Grid.right model.player.pos
+    in
     if canMove model.collision model.player.pos input then
         { model
             | player =
                 Player.setPos
-                    (case input of
-                        MoveUp ->
-                            Grid.up model.player.pos
-
-                        MoveDown ->
-                            Grid.down model.player.pos
-
-                        MoveLeft ->
-                            Grid.left model.player.pos
-
-                        MoveRight ->
-                            Grid.right model.player.pos
-                    )
+                    newPos
                     model.player
         }
 
@@ -156,19 +160,22 @@ viewPlayer player tileWidth tileHeight =
 
 view : Model -> Html Msg
 view model =
-    Html.div [ Attributes.class "flex justify-center h-screen bg-gray-700" ]
+    Html.div [ Attributes.class "flex justify-center bg-gray-700" ]
         [ Html.div
-            [ Attributes.class "flex flex-col justify-center h-screen w-full"
+            [ Attributes.class ""
             ]
             [ Svg.svg
-                [ List.map String.fromInt [ 0, 0, model.width * model.tileWidth, model.height * model.tileHeight ]
+                [ List.map String.fromInt [ 0, 0, model.tileWidth * model.width, model.tileHeight * model.height ]
                     |> String.join " "
                     |> SvgAttrs.viewBox
                 , SvgAttrs.width "100%"
                 , SvgAttrs.height "100%"
                 ]
               <|
-                List.map (viewLayer model.tiles model.tileHeight model.tileWidth) [ model.background, model.collision ]
+                List.map (viewLayer model.tiles model.tileHeight model.tileWidth)
+                    [ Grid.section model.player.pos 10 9 model.background
+                    , Grid.section model.player.pos 10 9 model.collision
+                    ]
                     ++ [ viewPlayer model.player model.tileWidth model.tileHeight ]
             ]
         ]
@@ -176,9 +183,18 @@ view model =
 
 viewLayer : Dict Int String -> Int -> Int -> Grid Int -> Svg.Svg msg
 viewLayer tiles tileHeight tileWidth grid =
+    let
+        ( camWidth, camHeight ) =
+            ( 10, 9 )
+    in
     Grid.toList grid
-        |> List.map (viewTile tiles tileHeight tileWidth)
-        |> Svg.g []
+        |> List.map (viewKeyedTile tiles tileHeight tileWidth)
+        |> Svg.Keyed.node "g" []
+
+
+viewKeyedTile : Dict Int String -> Int -> Int -> ( ( Int, Int ), Int ) -> ( String, Svg.Svg msg )
+viewKeyedTile tiles tileHeight tileWidth ( coord, tile ) =
+    ( Grid.toString coord, viewTile tiles tileHeight tileWidth ( coord, tile ) )
 
 
 viewTile : Dict Int String -> Int -> Int -> ( ( Int, Int ), Int ) -> Svg.Svg msg

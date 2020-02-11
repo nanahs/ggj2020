@@ -1,17 +1,25 @@
-module Grid exposing (Grid, down, get, height, init, insert, left, member, remove, right, toList, up, update, width)
+module Grid exposing
+    ( Grid
+    , down
+    , get
+    , init
+    , insert
+    , left
+    , member
+    , remove
+    , right
+    , section
+    , toList
+    , toString
+    , up
+    , update
+    )
 
 import Dict exposing (Dict)
 
 
 type Grid a
-    = Grid (Internal a)
-
-
-type alias Internal a =
-    { grid : Dict String a
-    , height : Int
-    , width : Int
-    }
+    = Grid (Dict String a)
 
 
 up : ( Int, Int ) -> ( Int, Int )
@@ -34,49 +42,81 @@ right ( x, y ) =
     ( x + 1, y )
 
 
+section : ( Int, Int ) -> Int -> Int -> Grid a -> Grid a
+section ( x, y ) camWidth camHeight (Grid grid) =
+    let
+        ( camX, camY ) =
+            ( (-) x <| (camWidth + 1) // 2, (-) y <| (camHeight + 1) // 2 )
+    in
+    List.foldl
+        (\coord acc ->
+            case Dict.get (toString coord) grid of
+                Just tile ->
+                    Dict.insert (toString coord) tile acc
+
+                Nothing ->
+                    acc
+        )
+        Dict.empty
+        (sectionHelper camX camY camWidth camHeight)
+        |> Grid
+
+
+sectionHelper : Int -> Int -> Int -> Int -> List ( Int, Int )
+sectionHelper camX camY camWidth camHeight =
+    List.range camX (camX + camWidth)
+        |> List.map
+            (\x ->
+                List.range camY (camY + camHeight)
+                    |> List.map (\y -> ( x, y ))
+            )
+        |> List.concat
+
+
+isEven : Int -> Bool
+isEven =
+    (==) 0 << modBy 2
+
+
 
 --
 
 
 member : ( Int, Int ) -> Grid a -> Bool
-member coord (Grid { grid }) =
+member coord (Grid grid) =
     Dict.member (toString coord) grid
 
 
 get : ( Int, Int ) -> Grid a -> Maybe a
-get coord (Grid { grid }) =
+get coord (Grid grid) =
     Dict.get (toString coord) grid
 
 
 insert : ( Int, Int ) -> a -> Grid a -> Grid a
 insert coord val (Grid grid) =
-    Grid { grid | grid = Dict.insert (toString coord) val grid.grid }
+    Grid <| Dict.insert (toString coord) val grid
 
 
 update : ( Int, Int ) -> (Maybe a -> Maybe a) -> Grid a -> Grid a
 update coord alter (Grid grid) =
-    Grid { grid | grid = Dict.update (toString coord) alter grid.grid }
+    Grid <| Dict.update (toString coord) alter grid
 
 
 remove : ( Int, Int ) -> Grid a -> Grid a
 remove coord (Grid grid) =
-    Grid { grid | grid = Dict.remove (toString coord) grid.grid }
+    Grid <| Dict.remove (toString coord) grid
 
 
 init : Int -> Int -> List ( ( Int, Int ), a ) -> Grid a
 init h w list =
-    Grid
-        { grid =
-            list
-                |> List.map (Tuple.mapFirst toString)
-                |> Dict.fromList
-        , height = h
-        , width = w
-        }
+    list
+        |> List.map (Tuple.mapFirst toString)
+        |> Dict.fromList
+        |> Grid
 
 
 toList : Grid a -> List ( ( Int, Int ), a )
-toList (Grid { grid }) =
+toList (Grid grid) =
     Dict.toList grid
         |> List.filterMap
             (\( key, val ) ->
@@ -84,17 +124,13 @@ toList (Grid { grid }) =
             )
 
 
-height : Grid a -> Int
-height (Grid grid) =
-    grid.height
 
-
-width : Grid a -> Int
-width (Grid grid) =
-    grid.width
-
-
-
+-- height : Grid a -> Int
+-- height (Grid grid) =
+--     grid.height
+-- width : Grid a -> Int
+-- width (Grid grid) =
+--     grid.width
 -- INTERNALS
 
 
