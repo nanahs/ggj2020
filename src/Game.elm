@@ -118,18 +118,27 @@ updateInput model input =
 
 canMove : Grid Int -> ( Int, Int ) -> Input -> Bool
 canMove collisions pos input =
+    -- 0 is an empty location
     case input of
         MoveUp ->
-            Grid.member (Grid.up pos) collisions
+            Grid.get (Grid.up pos) collisions
+                |> Maybe.map ((==) 0)
+                |> Maybe.withDefault False
 
         MoveDown ->
-            Grid.member (Grid.down pos) collisions
+            Grid.get (Grid.down pos) collisions
+                |> Maybe.map ((==) 0)
+                |> Maybe.withDefault False
 
         MoveLeft ->
-            Grid.member (Grid.left pos) collisions
+            Grid.get (Grid.left pos) collisions
+                |> Maybe.map ((==) 0)
+                |> Maybe.withDefault False
 
         MoveRight ->
-            Grid.member (Grid.right pos) collisions
+            Grid.get (Grid.right pos) collisions
+                |> Maybe.map ((==) 0)
+                |> Maybe.withDefault False
 
 
 
