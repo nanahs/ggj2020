@@ -39,7 +39,7 @@ init map =
             Map.mapHeight map
     in
     { isPause = False
-    , player = Player.initPlayer <| ( 2, 2 )
+    , player = Player.initPlayer <| ( 8, 7 )
     , background = initGrid height width (Map.background map)
     , collision = initGrid height width (Map.collisions map)
     , tiles = Map.tileset map
@@ -47,9 +47,6 @@ init map =
     , width = width
     , tileHeight = Map.tileHeight map
     , tileWidth = Map.tileWidth map
-
-    -- , collisions = Grid.empty
-    -- , map = map
     }
 
 
@@ -164,7 +161,7 @@ view model =
             [ Attributes.class "flex flex-col justify-center h-screen w-full"
             ]
             [ Svg.svg
-                [ List.map String.fromInt [ 0, 0, model.height * model.tileHeight, model.width * model.tileWidth ]
+                [ List.map String.fromInt [ 0, 0, model.width * model.tileWidth, model.height * model.tileHeight ]
                     |> String.join " "
                     |> SvgAttrs.viewBox
                 , SvgAttrs.width "100%"
