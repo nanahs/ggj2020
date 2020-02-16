@@ -8,7 +8,6 @@ module Grid exposing
     , member
     , remove
     , right
-    , section
     , toList
     , toString
     , up
@@ -40,37 +39,6 @@ left ( x, y ) =
 right : ( Int, Int ) -> ( Int, Int )
 right ( x, y ) =
     ( x + 1, y )
-
-
-section : ( Int, Int ) -> Int -> Int -> Grid a -> Grid a
-section ( x, y ) camWidth camHeight (Grid grid) =
-    let
-        ( camX, camY ) =
-            ( (-) x <| (camWidth + 1) // 2, (-) y <| (camHeight + 1) // 2 )
-    in
-    List.foldl
-        (\coord acc ->
-            case Dict.get (toString coord) grid of
-                Just tile ->
-                    Dict.insert (toString coord) tile acc
-
-                Nothing ->
-                    acc
-        )
-        Dict.empty
-        (sectionHelper camX camY camWidth camHeight)
-        |> Grid
-
-
-sectionHelper : Int -> Int -> Int -> Int -> List ( Int, Int )
-sectionHelper camX camY camWidth camHeight =
-    List.range camX (camX + camWidth)
-        |> List.map
-            (\x ->
-                List.range camY (camY + camHeight)
-                    |> List.map (\y -> ( x, y ))
-            )
-        |> List.concat
 
 
 isEven : Int -> Bool

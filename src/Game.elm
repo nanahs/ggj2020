@@ -40,7 +40,7 @@ init map =
             Map.mapHeight map
     in
     { isPause = False
-    , player = Player.initPlayer <| ( 5, 6 )
+    , player = Player.initPlayer <| ( 9, 8 )
     , background = initGrid height width (Map.background map)
     , collision = initGrid height width (Map.collisions map)
     , tiles = Map.tileset map
@@ -160,12 +160,27 @@ viewPlayer player tileWidth tileHeight =
 
 view : Model -> Html Msg
 view model =
+    let
+        camHeight =
+            9
+
+        camWidth =
+            10
+
+        ( camX, camY ) =
+            ( Tuple.first model.player.pos - ((camWidth - 1) // 2), Tuple.second model.player.pos - ((camHeight - 1) // 2) )
+    in
     Html.div [ Attributes.class "flex justify-center bg-gray-700" ]
         [ Html.div
             [ Attributes.class ""
             ]
             [ Svg.svg
-                [ List.map String.fromInt [ 0, 0, model.tileWidth * model.width, model.tileHeight * model.height ]
+                [ List.map String.fromInt
+                    [ camX * model.tileWidth
+                    , camY * model.tileHeight
+                    , camWidth * model.tileWidth
+                    , camHeight * model.tileHeight
+                    ]
                     |> String.join " "
                     |> SvgAttrs.viewBox
                 , SvgAttrs.width "100%"
@@ -173,8 +188,8 @@ view model =
                 ]
               <|
                 List.map (viewLayer model.tiles model.tileHeight model.tileWidth)
-                    [ Grid.section model.player.pos 10 9 model.background
-                    , Grid.section model.player.pos 10 9 model.collision
+                    [ model.background
+                    , model.collision
                     ]
                     ++ [ viewPlayer model.player model.tileWidth model.tileHeight ]
             ]
@@ -183,18 +198,9 @@ view model =
 
 viewLayer : Dict Int String -> Int -> Int -> Grid Int -> Svg.Svg msg
 viewLayer tiles tileHeight tileWidth grid =
-    let
-        ( camWidth, camHeight ) =
-            ( 10, 9 )
-    in
     Grid.toList grid
-        |> List.map (viewKeyedTile tiles tileHeight tileWidth)
-        |> Svg.Keyed.node "g" []
-
-
-viewKeyedTile : Dict Int String -> Int -> Int -> ( ( Int, Int ), Int ) -> ( String, Svg.Svg msg )
-viewKeyedTile tiles tileHeight tileWidth ( coord, tile ) =
-    ( Grid.toString coord, viewTile tiles tileHeight tileWidth ( coord, tile ) )
+        |> List.map (viewTile tiles tileHeight tileWidth)
+        |> Svg.g []
 
 
 viewTile : Dict Int String -> Int -> Int -> ( ( Int, Int ), Int ) -> Svg.Svg msg
