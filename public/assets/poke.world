@@ -1,0 +1,22 @@
+{
+    "maps": [
+        {
+            "fileName": "palletTown.tmx",
+            "x": 96,
+            "y": 1136
+        }
+        ,
+        {
+            "fileName": "route1.tmx",
+            "x": 160,
+            "y": 560
+        }
+        ,
+        {
+            "fileName": "viridianCity.tmx",
+            "x": 0,
+            "y": 0
+        }
+    ],
+    "type": "world"
+}
