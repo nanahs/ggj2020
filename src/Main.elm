@@ -23,7 +23,7 @@ init : Value -> ( Model, Cmd Msg )
 init _ =
     ( Loading
     , Http.get
-        { url = String.concat [ Constants.assetDir, "palletTown.json" ]
+        { url = String.concat [ Constants.assetDir, "route1.json" ]
         , expect = Http.expectJson LevelLoaded Tiledmap.decoder
         }
     )
